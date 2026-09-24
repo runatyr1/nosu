@@ -1,9 +1,12 @@
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
+import { createRequire } from 'node:module'
 
 import { assetVersion } from './lib/asset-version.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
+const require = createRequire(import.meta.url)
+const reactNativeWebRoot = dirname(require.resolve('react-native-web/package.json'))
 const ASSET_VERSION = assetVersion(join(here, 'public'))
 
 /** @type {import('next').NextConfig}. */
@@ -70,13 +73,19 @@ const nextConfig = {
           { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
         ],
       },
-      {
-        // Next's own chunks are already content-hashed by the bundler.
-        source: '/_next/static/:path*',
-        headers: [
-          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
-        ],
-      },
+      // Production chunks are content-hashed and safe to keep forever. Next's
+      // development chunk names are stable, though, so marking them immutable
+      // lets a browser combine modules from different HMR generations.
+      ...(process.env.NODE_ENV === 'production'
+        ? [
+            {
+              source: '/_next/static/:path*',
+              headers: [
+                { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+              ],
+            },
+          ]
+        : []),
     ]
   },
 
@@ -86,7 +95,9 @@ const nextConfig = {
     // here, and to the real React Native under Metro.
     config.resolve.alias = {
       ...config.resolve.alias,
-      'react-native$': 'react-native-web',
+      // Use an absolute target so pnpm's strict dependency boundaries do not
+      // try to resolve react-native-web from the importing workspace package.
+      'react-native$': reactNativeWebRoot,
     }
     // React Native packages ship `.web.js` variants that must win over the native ones.
     // Without this the bundler picks the native file and pulls in Fabric internals.

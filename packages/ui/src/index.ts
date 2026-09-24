@@ -49,8 +49,7 @@ export function themeRoles(theme: ThemeName): ThemeRoles {
 }
 
 export function oppositeTheme(theme: ThemeName): ThemeName {
-  // One palette: there is nothing to flip.
-  return theme
+  return theme === 'light' ? 'black' : 'light'
 }
 
 /** Every role variable for one theme, colours and shadows together, as a plain object. */
@@ -88,14 +87,23 @@ export interface StylesheetOptions extends CssTextOptions {
 /** The palette as one stylesheet, mirroring theme.css. */
 export function themeStylesheet(options: StylesheetOptions = {}): string {
   const light = options.lightSelector ?? ':root'
-  return `${light} {\n${themeCssText('light', options)}\n}\n`
+  const dark = options.darkSelector ?? '.dark'
+  return `${light} {\n${themeCssText('light', options)}\n}\n${dark} {\n${themeCssText('black', options)}\n}\n`
 }
 
 export function isThemeName(value: unknown): value is ThemeName {
-  return value === 'light'
+  return (
+    value === 'light' ||
+    value === 'black' ||
+    value === 'brown' ||
+    value === 'slate' ||
+    value === 'purple' ||
+    value === 'pink' ||
+    value === 'custom-dark' ||
+    value === 'custom-light'
+  )
 }
 
-/** One palette, so this only ever answers `light`. */
 export function resolveTheme(stored: unknown): ThemeName {
   return isThemeName(stored) ? stored : DEFAULT_THEME
 }
@@ -103,19 +111,19 @@ export function resolveTheme(stored: unknown): ThemeName {
 /** Source for a synchronous inline `<script>` in `<head>`. */
 export function themeInitScript(readerJs?: string): string {
   const key = JSON.stringify(THEME_STORAGE_KEY)
+  const fallback = JSON.stringify(DEFAULT_THEME)
   // The whole map is inlined rather than branching on names in the script.
   const map = JSON.stringify(THEME_CLASSES)
   const all = JSON.stringify(ALL_THEME_CLASSES)
-  const fallback = JSON.stringify(DEFAULT_THEME)
   return (
     `(function(){try{` +
-    // A theme belongs to an ACCOUNT, so the host passes in a reader that resolves.
+    // Hosts may pass an account-scoped reader; the web client intentionally keeps this device-wide.
     `var m=${map},t=${readerJs === undefined ? `localStorage.getItem(${key})` : `(${readerJs})(${key})`};` +
     `if(!m[t])t=${fallback};` +
     `var r=document.documentElement;` +
     `r.classList.remove.apply(r.classList,${all});` +
     `if(m[t].length)r.classList.add.apply(r.classList,m[t]);` +
-    `r.style.colorScheme="light";` +
+    `r.style.colorScheme=t==="light"||t==="custom-light"?"light":"dark";` +
     /* THE BROWSER'S OWN CHROME. */
     `var c=getComputedStyle(r).getPropertyValue("--role-bg").trim();` +
     `if(c){var q=document.querySelector('meta[name="theme-color"]');` +

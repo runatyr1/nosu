@@ -132,7 +132,15 @@ export const palette = {
 
 // --------------------------------------------------------------------------- Surface.
 
-export type ThemeName = 'light'
+export type ThemeName =
+  | 'light'
+  | 'black'
+  | 'brown'
+  | 'slate'
+  | 'purple'
+  | 'pink'
+  | 'custom-dark'
+  | 'custom-light'
 
 /** The indirection every component should use. */
 /** #1d9bf0. See `verified` below for why it is this exact blue and not a brand colour. */
@@ -147,6 +155,8 @@ export interface ThemeRoles {
   bgInset: string
   /** The surface a row takes on hover. */
   hover: string
+  /** Resting surface for small filled chips. */
+  bgChip: string
   /** Hairline dividers. */
   border: string
   /** Borders that carry meaning. */
@@ -224,6 +234,7 @@ const light: ThemeRoles = {
   bgElevated: neutral[50],
   bgInset: neutral[100],
   hover: '#ededed',
+  bgChip: '#ededed',
   border: neutral[200],
   borderStrong: neutral[400],
   // One step past `border` on the same scale.
@@ -236,14 +247,14 @@ const light: ThemeRoles = {
 
   // 4.95:1 on white.
   link: '#0f6fd4',
-  accent: lavenderPurple[500],
-  accentHover: lavenderPurple[600],
-  accentActive: lavenderPurple[700],
-  accentSubtle: lavenderPurple[50],
-  accentBorder: lavenderPurple[200],
-  accentText: lavenderPurple[600],
+  accent: neutral[900],
+  accentHover: neutral[700],
+  accentActive: neutral[600],
+  accentSubtle: neutral[50],
+  accentBorder: neutral[300],
+  accentText: neutral[900],
   onAccent: palette.white,
-  focusRing: lavenderPurple[500],
+  focusRing: neutral[900],
 
   success: semantic.success.solid,
   onSuccess: semantic.success.onSolid,
@@ -279,18 +290,164 @@ const light: ThemeRoles = {
   overlay: 'rgb(14 12 23 / 0.48)',
 }
 
-export const themes: Readonly<Record<ThemeName, ThemeRoles>> = { light }
+const black: ThemeRoles = {
+  bg: '#0a0a0a',
+  bgElevated: '#171717',
+  bgInset: '#050505',
+  hover: '#1c1c1c',
+  bgChip: '#262626',
+  border: '#404040',
+  borderStrong: '#737373',
+  borderInset: '#525252',
+  text: '#fafafa',
+  textMuted: '#cacaca',
+  textFaint: '#9a9a9a',
+  navIcon: '#fafafa',
 
-/** One palette, and it is the light one. */
-export const DEFAULT_THEME: ThemeName = 'light'
+  link: '#5eb0f5',
+  accent: '#fafafa',
+  accentHover: '#e5e5e5',
+  accentActive: '#cacaca',
+  accentSubtle: '#262626',
+  accentBorder: '#525252',
+  accentText: '#fafafa',
+  onAccent: '#0a0a0a',
+  focusRing: '#fafafa',
 
-/** No theme puts a class on `<html>`. */
+  success: '#217d52',
+  onSuccess: '#ffffff',
+  successText: '#66d6a2',
+  successSurface: '#11271d',
+  successBorder: '#2d5844',
+
+  warning: '#a54a1d',
+  onWarning: '#ffffff',
+  warningText: '#eb8f60',
+  warningSurface: '#2c1a11',
+  warningBorder: '#5f3c2b',
+
+  danger: '#bf2237',
+  onDanger: '#ffffff',
+  dangerText: '#e76e7e',
+  dangerSurface: '#2c1115',
+  dangerBorder: '#5f2b32',
+
+  zap: '#ffb020',
+  onZap: '#0a0a0a',
+  zapText: '#ffb020',
+  zapIcon: '#ffb020',
+  verified: VERIFIED_BLUE,
+  zapSurface: '#2b1e05',
+  zapBorder: '#6b5214',
+
+  chartPeople: '#4296e7',
+  chartSats: '#cd8000',
+  chartNotes: '#897bcc',
+  overlay: 'rgb(10 10 11 / 0.55)',
+}
+
+const brown: ThemeRoles = {
+  ...black,
+  bg: '#16160f',
+  bgElevated: '#201f18',
+  bgInset: '#100f0a',
+  hover: '#24231b',
+  bgChip: '#2d2c25',
+  border: '#35352d',
+  borderStrong: '#7a786c',
+  borderInset: '#4b4a41',
+  text: '#f2f1e6',
+  textMuted: '#a5a495',
+  textFaint: '#78776b',
+  navIcon: '#f2f1e6',
+  overlay: 'rgb(10 10 6 / 0.72)',
+}
+
+const slate: ThemeRoles = {
+  ...black,
+  bg: '#101215',
+  bgElevated: '#181b20',
+  bgInset: '#0b0d10',
+  hover: '#1b1e23',
+  bgChip: '#26292e',
+  border: '#2c2e31',
+  borderStrong: '#767b82',
+  borderInset: '#44474b',
+  text: '#e8eaed',
+  textMuted: '#9aa1ab',
+  textFaint: '#6b727c',
+  navIcon: '#e8eaed',
+  overlay: 'rgb(6 8 10 / 0.72)',
+}
+
+const purple: ThemeRoles = {
+  ...black,
+  bg: '#1b1624',
+  bgElevated: '#241c30',
+  bgInset: '#120e19',
+  hover: '#2c2238',
+  bgChip: '#332740',
+  border: '#463852',
+  borderStrong: '#8d7a9d',
+  borderInset: '#5d4a6d',
+  text: '#f1eaf7',
+  textMuted: '#baaaca',
+  textFaint: '#8c7c9b',
+  navIcon: '#f1eaf7',
+  overlay: 'rgb(13 8 18 / 0.68)',
+}
+
+const pink: ThemeRoles = {
+  ...black,
+  bg: '#25171f',
+  bgElevated: '#301d28',
+  bgInset: '#190f15',
+  hover: '#39232f',
+  bgChip: '#422936',
+  border: '#533743',
+  borderStrong: '#9b7b89',
+  borderInset: '#6d4b59',
+  text: '#f8e9f0',
+  textMuted: '#c7a8b5',
+  textFaint: '#957783',
+  navIcon: '#f8e9f0',
+  overlay: 'rgb(18 8 13 / 0.68)',
+}
+
+export const themes: Readonly<Record<ThemeName, ThemeRoles>> = {
+  light,
+  black,
+  brown,
+  slate,
+  purple,
+  pink,
+  'custom-dark': black,
+  'custom-light': light,
+}
+
+export const DEFAULT_THEME: ThemeName = 'slate'
+
 export const THEME_CLASSES: Readonly<Record<ThemeName, readonly string[]>> = {
   light: [],
+  black: ['dark'],
+  brown: ['dark', 'theme-brown'],
+  slate: ['dark', 'theme-slate'],
+  purple: ['dark', 'theme-purple'],
+  pink: ['dark', 'theme-pink'],
+  'custom-dark': ['dark', 'theme-custom-dark'],
+  'custom-light': ['theme-custom-light'],
 }
 
 /** Every class any theme applies. */
-export const ALL_THEME_CLASSES: readonly string[] = []
+export const ALL_THEME_CLASSES: readonly string[] = [
+  'dark',
+  'theme-brown',
+  'theme-slate',
+  'theme-purple',
+  'theme-pink',
+  'theme-custom-dark',
+  'theme-custom-light',
+]
 
 /** Namespaced so it cannot collide with a relay/signer key in the same origin. */
 export const THEME_STORAGE_KEY = 'nostrich:theme'
@@ -408,6 +565,55 @@ export type ShadowKey = 'sm' | 'md' | 'lg' | 'xl' | 'zapGlow'
 /** CSS `box-shadow` strings, one set per theme. */
 export const shadows: Readonly<Record<ThemeName, Readonly<Record<ShadowKey, string>>>> = {
   light: {
+    sm: '0 1px 2px 0 rgb(14 12 23 / 0.06)',
+    md: '0 2px 4px -1px rgb(14 12 23 / 0.08), 0 4px 12px -2px rgb(14 12 23 / 0.06)',
+    lg: '0 4px 8px -2px rgb(14 12 23 / 0.10), 0 12px 28px -4px rgb(14 12 23 / 0.08)',
+    xl: '0 8px 16px -4px rgb(14 12 23 / 0.12), 0 24px 48px -8px rgb(14 12 23 / 0.10)',
+    zapGlow: '0 0 0 1px rgb(245 190 10 / 0.45), 0 4px 16px -2px rgb(245 190 10 / 0.35)',
+  },
+  black: {
+    sm: '0 1px 2px 0 rgb(0 0 0 / 0.50)',
+    md: '0 2px 4px -1px rgb(0 0 0 / 0.55), 0 4px 12px -2px rgb(0 0 0 / 0.45)',
+    lg: '0 4px 8px -2px rgb(0 0 0 / 0.60), 0 12px 28px -4px rgb(0 0 0 / 0.50)',
+    xl: '0 8px 16px -4px rgb(0 0 0 / 0.65), 0 24px 48px -8px rgb(0 0 0 / 0.55)',
+    zapGlow: '0 0 0 1px rgb(245 190 10 / 0.35), 0 4px 20px -2px rgb(245 190 10 / 0.30)',
+  },
+  brown: {
+    sm: '0 1px 2px 0 rgb(0 0 0 / 0.50)',
+    md: '0 2px 4px -1px rgb(0 0 0 / 0.55), 0 4px 12px -2px rgb(0 0 0 / 0.45)',
+    lg: '0 4px 8px -2px rgb(0 0 0 / 0.60), 0 12px 28px -4px rgb(0 0 0 / 0.50)',
+    xl: '0 8px 16px -4px rgb(0 0 0 / 0.65), 0 24px 48px -8px rgb(0 0 0 / 0.55)',
+    zapGlow: '0 0 0 1px rgb(245 190 10 / 0.35), 0 4px 20px -2px rgb(245 190 10 / 0.30)',
+  },
+  slate: {
+    sm: '0 1px 2px 0 rgb(0 0 0 / 0.50)',
+    md: '0 2px 4px -1px rgb(0 0 0 / 0.55), 0 4px 12px -2px rgb(0 0 0 / 0.45)',
+    lg: '0 4px 8px -2px rgb(0 0 0 / 0.60), 0 12px 28px -4px rgb(0 0 0 / 0.50)',
+    xl: '0 8px 16px -4px rgb(0 0 0 / 0.65), 0 24px 48px -8px rgb(0 0 0 / 0.55)',
+    zapGlow: '0 0 0 1px rgb(245 190 10 / 0.35), 0 4px 20px -2px rgb(245 190 10 / 0.30)',
+  },
+  purple: {
+    sm: '0 1px 2px 0 rgb(0 0 0 / 0.50)',
+    md: '0 2px 4px -1px rgb(0 0 0 / 0.55), 0 4px 12px -2px rgb(0 0 0 / 0.45)',
+    lg: '0 4px 8px -2px rgb(0 0 0 / 0.60), 0 12px 28px -4px rgb(0 0 0 / 0.50)',
+    xl: '0 8px 16px -4px rgb(0 0 0 / 0.65), 0 24px 48px -8px rgb(0 0 0 / 0.55)',
+    zapGlow: '0 0 0 1px rgb(245 190 10 / 0.35), 0 4px 20px -2px rgb(245 190 10 / 0.30)',
+  },
+  pink: {
+    sm: '0 1px 2px 0 rgb(0 0 0 / 0.50)',
+    md: '0 2px 4px -1px rgb(0 0 0 / 0.55), 0 4px 12px -2px rgb(0 0 0 / 0.45)',
+    lg: '0 4px 8px -2px rgb(0 0 0 / 0.60), 0 12px 28px -4px rgb(0 0 0 / 0.50)',
+    xl: '0 8px 16px -4px rgb(0 0 0 / 0.65), 0 24px 48px -8px rgb(0 0 0 / 0.55)',
+    zapGlow: '0 0 0 1px rgb(245 190 10 / 0.35), 0 4px 20px -2px rgb(245 190 10 / 0.30)',
+  },
+  'custom-dark': {
+    sm: '0 1px 2px 0 rgb(0 0 0 / 0.50)',
+    md: '0 2px 4px -1px rgb(0 0 0 / 0.55), 0 4px 12px -2px rgb(0 0 0 / 0.45)',
+    lg: '0 4px 8px -2px rgb(0 0 0 / 0.60), 0 12px 28px -4px rgb(0 0 0 / 0.50)',
+    xl: '0 8px 16px -4px rgb(0 0 0 / 0.65), 0 24px 48px -8px rgb(0 0 0 / 0.55)',
+    zapGlow: '0 0 0 1px rgb(245 190 10 / 0.35), 0 4px 20px -2px rgb(245 190 10 / 0.30)',
+  },
+  'custom-light': {
     sm: '0 1px 2px 0 rgb(14 12 23 / 0.06)',
     md: '0 2px 4px -1px rgb(14 12 23 / 0.08), 0 4px 12px -2px rgb(14 12 23 / 0.06)',
     lg: '0 4px 8px -2px rgb(14 12 23 / 0.10), 0 12px 28px -4px rgb(14 12 23 / 0.08)',

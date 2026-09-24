@@ -11,8 +11,8 @@
  * import TypeScript, so the two are kept in step by hand and `themeStylesheet()` from
  * @nostrich/ui emits exactly the :root block below for comparison.
  *
- * ONE PALETTE. The page is light, always: there is no theme switch and no second block of
- * values.
+ * Light is the default. Black, Brown and Slate are applied by classes on <html>; Brown and
+ * Slate inherit the Black semantic colours and replace the neutral surfaces.
  */
 
 /**
@@ -182,14 +182,14 @@
      see `navIcon` in tokens.ts for why the whole rail takes it, active row or not. */
   --role-nav-icon: #0f1419;
 
-  --role-accent: #6558a7;
-  --role-accent-hover: #514686;
-  --role-accent-active: #3d3564;
+  --role-accent: #171717;
+  --role-accent-hover: #404040;
+  --role-accent-active: #525252;
   --role-accent-subtle: #fafafa;
-  --role-accent-border: #c1bcdc;
-  --role-accent-text: #514686;
+  --role-accent-border: #cacaca;
+  --role-accent-text: #171717;
   --role-on-accent: #ffffff;
-  --role-focus-ring: #6558a7;
+  --role-focus-ring: #171717;
 
   --role-success: #217d52;
   --role-on-success: #ffffff;
@@ -297,6 +297,137 @@
   --duration-base: 180ms;
   --duration-slow: 240ms;
   --duration-slower: 320ms;
+}
+
+.dark {
+  color-scheme: dark;
+
+  --role-bg: #0a0a0a;
+  --role-bg-elevated: #171717;
+  --role-bg-inset: #050505;
+  --role-hover: #1c1c1c;
+  --role-bg-chip: #262626;
+  --role-border: #404040;
+  --role-border-strong: #737373;
+  --role-border-inset: #525252;
+  --role-text: #fafafa;
+  --role-text-muted: #cacaca;
+  --role-text-faint: #9a9a9a;
+  --role-nav-icon: #fafafa;
+
+  --role-accent: #fafafa;
+  --role-accent-hover: #e5e5e5;
+  --role-accent-active: #cacaca;
+  --role-accent-subtle: #262626;
+  --role-accent-border: #525252;
+  --role-accent-text: #fafafa;
+  --role-on-accent: #0a0a0a;
+  --role-focus-ring: #fafafa;
+
+  --role-success-text: #66d6a2;
+  --role-success-surface: #11271d;
+  --role-success-border: #2d5844;
+  --role-warning-text: #eb8f60;
+  --role-warning-surface: #2c1a11;
+  --role-warning-border: #5f3c2b;
+  --role-danger-text: #e76e7e;
+  --role-danger-surface: #2c1115;
+  --role-danger-border: #5f2b32;
+
+  --role-zap: #ffb020;
+  --role-on-zap: #0a0a0a;
+  --role-zap-icon: #ffb020;
+  --role-zap-text: #ffb020;
+  --role-chart-people: #4296e7;
+  --role-chart-sats: #cd8000;
+  --role-chart-notes: #897bcc;
+  --role-link: #5eb0f5;
+  --role-zap-surface: #2b1e05;
+  --role-zap-border: #6b5214;
+
+  --role-action-reply: #4aa8ff;
+  --role-action-tint: 18%;
+  --role-action-hover: rgba(255, 255, 255, 0.07);
+  --role-lit: rgba(255, 150, 20, 0.3);
+  --role-overlay: rgb(10 10 11 / 0.55);
+
+  --role-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.5);
+  --role-shadow-md: 0 2px 4px -1px rgb(0 0 0 / 0.55), 0 4px 12px -2px rgb(0 0 0 / 0.45);
+  --role-shadow-lg: 0 4px 8px -2px rgb(0 0 0 / 0.6), 0 12px 28px -4px rgb(0 0 0 / 0.5);
+  --role-shadow-xl: 0 8px 16px -4px rgb(0 0 0 / 0.65), 0 24px 48px -8px rgb(0 0 0 / 0.55);
+  --role-shadow-zap-glow: 0 0 0 1px rgb(245 190 10 / 0.35), 0 4px 20px -2px rgb(245 190 10 / 0.3);
+}
+
+.theme-brown {
+  --role-bg: #16160f;
+  --role-bg-elevated: #201f18;
+  --role-bg-inset: #100f0a;
+  --role-hover: #24231b;
+  --role-bg-chip: #2d2c25;
+  --role-border: #35352d;
+  --role-border-strong: #7a786c;
+  --role-border-inset: #4b4a41;
+  --role-text: #f2f1e6;
+  --role-text-muted: #a5a495;
+  --role-text-faint: #78776b;
+  --role-nav-icon: #f2f1e6;
+  --role-overlay: rgb(10 10 6 / 0.72);
+}
+
+.theme-slate {
+  --role-bg: #101215;
+  --role-bg-elevated: #181b20;
+  --role-bg-inset: #0b0d10;
+  --role-hover: #1b1e23;
+  --role-bg-chip: #26292e;
+  --role-border: #2c2e31;
+  --role-border-strong: #767b82;
+  --role-border-inset: #44474b;
+  --role-text: #e8eaed;
+  --role-text-muted: #9aa1ab;
+  --role-text-faint: #6b727c;
+  --role-nav-icon: #e8eaed;
+  --role-overlay: rgb(6 8 10 / 0.72);
+}
+
+.theme-purple {
+  --role-bg: #1b1624;
+  --role-bg-elevated: #241c30;
+  --role-bg-inset: #120e19;
+  --role-hover: #2c2238;
+  --role-bg-chip: #332740;
+  --role-border: #463852;
+  --role-border-strong: #8d7a9d;
+  --role-border-inset: #5d4a6d;
+  --role-text: #f1eaf7;
+  --role-text-muted: #baaaca;
+  --role-text-faint: #8c7c9b;
+  --role-nav-icon: #f1eaf7;
+  --role-overlay: rgb(13 8 18 / 0.68);
+}
+
+.theme-pink {
+  --role-bg: #25171f;
+  --role-bg-elevated: #301d28;
+  --role-bg-inset: #190f15;
+  --role-hover: #39232f;
+  --role-bg-chip: #422936;
+  --role-border: #533743;
+  --role-border-strong: #9b7b89;
+  --role-border-inset: #6d4b59;
+  --role-text: #f8e9f0;
+  --role-text-muted: #c7a8b5;
+  --role-text-faint: #957783;
+  --role-nav-icon: #f8e9f0;
+  --role-overlay: rgb(18 8 13 / 0.68);
+}
+
+.theme-custom-dark {
+  --role-bg: var(--nostrix-custom-theme-bg, #0a0a0a);
+}
+
+.theme-custom-light {
+  --role-bg: var(--nostrix-custom-theme-bg, #ffffff);
 }
 
 @theme inline {

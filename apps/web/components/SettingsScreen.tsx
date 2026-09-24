@@ -29,6 +29,17 @@ import { Panel } from './SettingsPanel'
 import { PAGE, PAGE_TITLE, TAB_ACTIVE, TAB_CELL_TIGHT, TAB_IDLE, TAB_LABEL, TAB_STRIP, TAB_STRIP_BLEED, TAB_STRIP_ROW_TIGHT, TAB_UNDERLINE } from '../lib/styles'
 import { MediaServerSettings } from './MediaServerSettings'
 import { RelaySettings } from './RelaySettings'
+import {
+  THEME_PALETTES,
+  applyCustomThemeBackground,
+  applyThemePreference,
+  readCustomThemeBackground,
+  readThemePreference,
+  subscribeTheme,
+  type CustomThemeBackground,
+  type ThemePaletteOption,
+  type ThemePreference,
+} from '../lib/theme'
 
 /** Settings, tabbed like the sign-in page. */
 
@@ -164,9 +175,20 @@ function AppearanceTab(): React.ReactNode {
   const signedIn = sessionPubkey(session) !== undefined
   // Starts at the app default so the server HTML and the first client render agree.
   const [size, setSize] = useState<FontSize>(DEFAULT_FONT_SIZE)
+  const [themePreference, setThemePreference] = useState<ThemePreference>('slate')
+  const [customDark, setCustomDark] = useState<CustomThemeBackground>('charcoal')
+  const [customLight, setCustomLight] = useState<CustomThemeBackground>('white')
 
   useEffect(() => {
     setSize(currentFontSize())
+    setThemePreference(readThemePreference())
+    setCustomDark(readCustomThemeBackground('custom-dark'))
+    setCustomLight(readCustomThemeBackground('custom-light'))
+    const stopTheme = subscribeTheme(() => {
+      setThemePreference(readThemePreference())
+      setCustomDark(readCustomThemeBackground('custom-dark'))
+      setCustomLight(readCustomThemeBackground('custom-light'))
+    })
 
     // Two tabs open should not disagree about the preference.
     const onStorage = (event: StorageEvent): void => {
@@ -177,12 +199,87 @@ function AppearanceTab(): React.ReactNode {
       }
     }
     window.addEventListener('storage', onStorage)
-    return () => window.removeEventListener('storage', onStorage)
+    return () => {
+      stopTheme()
+      window.removeEventListener('storage', onStorage)
+    }
   }, [])
+
+  const isThemeOptionActive = (option: ThemePaletteOption): boolean => {
+    if (themePreference !== option.theme) return false
+    if (option.background === undefined) return true
+    return option.theme === 'custom-dark'
+      ? customDark === option.background
+      : customLight === option.background
+  }
+
+  const selectThemeOption = (option: ThemePaletteOption): void => {
+    if (option.background !== undefined) {
+      const mode = option.theme === 'custom-dark' ? 'custom-dark' : 'custom-light'
+      applyCustomThemeBackground(mode, option.background)
+      if (mode === 'custom-dark') setCustomDark(option.background)
+      else setCustomLight(option.background)
+    }
+    applyThemePreference(option.theme)
+    setThemePreference(option.theme)
+  }
 
   return (
     /* `space-y-4`, not 8. The cards carry their own padding now, so the old gap left them. */
     <div className="space-y-4">
+      <Panel
+        title="Theme"
+        description="Choose a dark or light palette. Dark Slate is the default; your choice is remembered on this device and applied before the page paints."
+      >
+        <div className="space-y-2">
+          {THEME_PALETTES.map(palette => {
+            const active = palette.options.some(isThemeOptionActive)
+            return (
+              <div
+                key={palette.id}
+                className={`grid min-w-0 grid-cols-[4.5rem_1fr] items-center gap-2 rounded-lg border px-3 py-3 transition-colors ${
+                  active ? 'border-text bg-bg-inset' : 'border-border'
+                }`}
+              >
+                <button
+                  type="button"
+                  aria-label={`Use default ${palette.label.toLowerCase()} palette`}
+                  onClick={() => selectThemeOption(palette.options[0]!)}
+                  className="self-stretch text-left text-[14px] font-semibold text-text"
+                >
+                  {palette.label}
+                </button>
+                <div
+                  className="grid min-w-0 grid-cols-5 justify-items-center gap-2 min-[480px]:grid-cols-10"
+                  role="group"
+                  aria-label={`${palette.label} colors`}
+                >
+                  {palette.options.map(option => {
+                    const selected = isThemeOptionActive(option)
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        aria-label={`${palette.label}: ${option.label}`}
+                        aria-pressed={selected}
+                        title={option.label}
+                        onClick={() => selectThemeOption(option)}
+                        className={`size-7 rounded-full border-2 shadow-sm transition-transform hover:scale-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus-ring ${
+                          selected
+                            ? 'scale-110 border-text'
+                            : 'border-border-strong'
+                        }`}
+                        style={{ backgroundColor: option.color }}
+                      />
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </Panel>
+
       <Panel
         title="Text size"
         description="Applies to notes and articles. Navigation and buttons stay the same size, so the layout does not shift around; use your browser zoom if you want everything larger."

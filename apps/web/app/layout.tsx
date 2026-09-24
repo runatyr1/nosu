@@ -9,10 +9,12 @@ import { SCROLL_TOP_SCRIPT } from '../lib/scroll'
 import { BADGE_BOOTSTRAP_SCRIPT } from '../lib/badge-color'
 import { FONT_BOOTSTRAP_SCRIPT } from '../lib/font-size'
 import { asset } from '../lib/assets'
+import { BRAND } from '../config/brand'
+import { themeInitScript } from '@nostrich/ui'
+import { CUSTOM_THEME_BOOTSTRAP_SCRIPT } from '../lib/theme-data'
 import './globals.css'
 
-// Dot access, not bracket: Next inlines NEXT_PUBLIC_* by literal text substitution.
-const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://nostrich.org'
+const appUrl = BRAND.publicOrigin
 
 /** The brand typeface, matched to the wordmark. */
 const brand = Poppins({
@@ -23,17 +25,17 @@ const brand = Poppins({
 })
 
 /** Said in four places. */
-const SITE_DESCRIPTION =
-  'Nostrich is a new, 100% free, and best-in-class Nostr client for web, iOS, Android, Zapstore, and Mac. Your content. Your feed. Your experience.'
+const SITE_DESCRIPTION = BRAND.description
+const THEME_BOOTSTRAP_SCRIPT = themeInitScript()
 
 export const metadata: Metadata = {
   metadataBase: new URL(appUrl),
   title: {
-    default: 'Nostrich',
-    template: '%s · Nostrich',
+    default: BRAND.displayName,
+    template: `%s · ${BRAND.displayName}`,
   },
   description: SITE_DESCRIPTION,
-  applicationName: 'Nostrich',
+  applicationName: BRAND.displayName,
   // The SVG is the primary icon.
   icons: {
     icon: [
@@ -45,10 +47,10 @@ export const metadata: Metadata = {
     apple: [{ url: asset('/apple-touch-icon.png'), sizes: '180x180' }],
   },
   openGraph: {
-    title: 'Nostrich',
+    title: BRAND.displayName,
     description: SITE_DESCRIPTION,
     url: appUrl,
-    siteName: 'Nostrich',
+    siteName: BRAND.displayName,
     type: 'website',
     images: [
       {
@@ -56,14 +58,14 @@ export const metadata: Metadata = {
         url: '/nostrich-og.png',
         width: 3200,
         height: 1800,
-        alt: 'Nostrich, a Nostr client for web, iOS, Android and Mac.',
+        alt: `${BRAND.displayName}, a modular Nostr client.`,
       },
     ],
   },
   /** Twitter reads its own tags before falling back to Open Graph. */
   twitter: {
     card: 'summary_large_image',
-    title: 'Nostrich',
+    title: BRAND.displayName,
     description: SITE_DESCRIPTION,
     images: ['/nostrich-og.png'],
   },
@@ -72,8 +74,8 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   /** `viewport-fit=cover`. */
   viewportFit: 'cover',
-  /** One palette, so one colour: the page ground. */
-themeColor: '#ffffff',
+  /** Repainted before content by THEME_BOOTSTRAP_SCRIPT. */
+  themeColor: '#101215',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -98,7 +100,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 {
                   '@type': 'Organization',
                   '@id': `${appUrl}#organization`,
-                  name: 'Nostrich',
+                  name: BRAND.displayName,
                   url: appUrl,
                   logo: {
                     '@type': 'ImageObject',
@@ -110,13 +112,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 {
                   '@type': 'WebSite',
                   '@id': `${appUrl}#website`,
-                  name: 'Nostrich',
+                  name: BRAND.displayName,
                   url: appUrl,
                   publisher: { '@id': `${appUrl}#organization` },
                 },
                 {
                   '@type': 'SoftwareApplication',
-                  name: 'Nostrich',
+                  name: BRAND.displayName,
                   url: appUrl,
                   applicationCategory: 'SocialNetworkingApplication',
                   operatingSystem: 'Web',
@@ -130,7 +132,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body className="min-h-dvh bg-bg text-text">
-        {/* First thing in the body and deliberately blocking: it runs before the browser. */}
+        {/* First things in the body and deliberately blocking: they run before content paints. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: CUSTOM_THEME_BOOTSTRAP_SCRIPT }} />
         {/* Same reasoning as the theme script: applied before paint, or the reader watches. */}
         <script dangerouslySetInnerHTML={{ __html: FONT_BOOTSTRAP_SCRIPT }} />
         <script dangerouslySetInnerHTML={{ __html: BADGE_BOOTSTRAP_SCRIPT }} />

@@ -31,4 +31,6 @@ pnpm dev:social
 pnpm dev:groups
 ```
 
-Open `http://localhost:3400`. See [UPSTREAM.md](UPSTREAM.md) for source history and integration details.
+Open `http://localhost:3400`.
+
+See [REFERENCE.md](REFERENCE.md) for architecture and research notes, and [UPSTREAM.md](UPSTREAM.md) for source history and integration details.

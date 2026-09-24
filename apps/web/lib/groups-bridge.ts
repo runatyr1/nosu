@@ -31,6 +31,18 @@ export interface GroupsBridgeSession {
   signerKind?: 'privatekey' | 'nip07' | 'nip46'
 }
 
+export interface GroupsBridgeTheme {
+  protocol: typeof GROUPS_BRIDGE_PROTOCOL
+  type: 'theme'
+  name: string
+  mode: 'light' | 'dark'
+  colors: {
+    background: string
+    text: string
+    primary: string
+  }
+}
+
 export interface GroupsBridgeHello {
   protocol: typeof GROUPS_BRIDGE_PROTOCOL
   type: 'hello'

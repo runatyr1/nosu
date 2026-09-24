@@ -10,7 +10,7 @@ import { BADGE_BOOTSTRAP_SCRIPT } from '../lib/badge-color'
 import { FONT_BOOTSTRAP_SCRIPT } from '../lib/font-size'
 import { asset } from '../lib/assets'
 import { BRAND } from '../config/brand'
-import { themeInitScript } from '@nostrich/ui'
+import { DEFAULT_THEME, THEME_CLASSES, themeInitScript } from '@nostrich/ui'
 import { CUSTOM_THEME_BOOTSTRAP_SCRIPT } from '../lib/theme-data'
 import './globals.css'
 
@@ -81,7 +81,11 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     // The bootstrap script below edits this element's class list before React hydrates.
-    <html lang="en" suppressHydrationWarning className={brand.variable}>
+    <html
+      lang="en"
+      suppressHydrationWarning
+      className={[brand.variable, ...THEME_CLASSES[DEFAULT_THEME]].join(' ')}
+    >
       <head>
         {/* Material Symbols, the icon set the ported X layout uses. */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />

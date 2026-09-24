@@ -12,7 +12,9 @@ import {
   type GroupsBridgeNavigate,
   type GroupsBridgeResponse,
   type GroupsBridgeSession,
+  type GroupsBridgeTheme,
 } from '../../lib/groups-bridge'
+import { currentTheme, subscribeTheme } from '../../lib/theme'
 import { sessionPubkey, useSession } from '../SessionProvider'
 
 function defaultGroupsUrl(): string {
@@ -98,6 +100,26 @@ export function GroupChatFrame(): React.ReactNode {
     frame.current.contentWindow.postMessage(message, new URL(src).origin)
   }, [pubkey, session, src])
 
+  const postTheme = useCallback(() => {
+    if (!src || !frame.current?.contentWindow) return
+    const root = document.documentElement
+    const styles = getComputedStyle(root)
+    const customBackground = styles.getPropertyValue('--nostrix-custom-theme-bg').trim()
+    const message: GroupsBridgeTheme = {
+      protocol: GROUPS_BRIDGE_PROTOCOL,
+      type: 'theme',
+      name: currentTheme(),
+      mode: root.classList.contains('dark') ? 'dark' : 'light',
+      colors: {
+        background: customBackground || styles.getPropertyValue('--role-bg').trim(),
+        text: styles.getPropertyValue('--role-text').trim(),
+        primary: styles.getPropertyValue('--role-accent').trim(),
+      },
+    }
+    bridgeLog('theme:send', { name: message.name, mode: message.mode })
+    frame.current.contentWindow.postMessage(message, new URL(src).origin)
+  }, [src])
+
   useEffect(() => {
     if (!src) return
     const expectedOrigin = new URL(src).origin
@@ -115,6 +137,7 @@ export function GroupChatFrame(): React.ReactNode {
       if (message.type === 'hello') {
         bridgeLog('hello:receive')
         postSession()
+        postTheme()
         return
       }
       if (isGroupsBridgeNavigation(event.data)) {
@@ -176,9 +199,14 @@ export function GroupChatFrame(): React.ReactNode {
 
     window.addEventListener('message', onMessage)
     return () => window.removeEventListener('message', onMessage)
-  }, [postSession, router, session, src])
+  }, [postSession, postTheme, router, session, src])
 
   useEffect(postSession, [postSession])
+
+  useEffect(() => {
+    postTheme()
+    return subscribeTheme(() => postTheme())
+  }, [postTheme])
 
   useEffect(() => {
     if (!src || !frame.current?.contentWindow) return
@@ -212,6 +240,7 @@ export function GroupChatFrame(): React.ReactNode {
       onLoad={() => {
         bridgeLog('frame:load', { src })
         postSession()
+        postTheme()
       }}
       onError={() => bridgeLog('frame:error', { src })}
       className="block h-[calc(100dvh-1px)] w-full border-0 bg-[#111214]"

@@ -6,6 +6,7 @@ import { useStoredRelays } from '../lib/relay-apply'
 import { useEffect, useState, type ReactNode } from 'react'
 
 import { ThemeProvider } from '@nostrich/app'
+import { DEFAULT_THEME } from '@nostrich/ui'
 
 import { ClockProvider } from './Clock'
 import { SessionProvider } from './SessionProvider'
@@ -30,7 +31,10 @@ export function Providers({ children }: { children: ReactNode }): ReactNode {
         },
       }),
   )
-  const [theme, setTheme] = useState<Theme>('light')
+  // Match the server-rendered root palette on the first render. Starting this
+  // provider in light mode put light React Native text on the default dark
+  // Slate canvas until the effect ran, and also caused a hydration mismatch.
+  const [theme, setTheme] = useState<Theme>(DEFAULT_THEME)
 
   useEffect(() => {
     setTheme(currentTheme())

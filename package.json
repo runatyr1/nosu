@@ -1,12 +1,17 @@
 {
-  "name": "nostrich",
+  "name": "nostrix",
   "private": true,
   "packageManager": "pnpm@9.12.3",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "scripts": {
     "dev": "turbo run dev",
+    "dev:social": "pnpm --filter web dev",
+    "dev:groups": "npm --prefix apps/groups run dev",
+    "dev:trending": "pnpm --filter @nostrich/api trending",
+    "install:groups": "npm_config_cache=${TMPDIR:-/tmp}/nostrix-npm-cache npm --prefix apps/groups ci",
+    "typecheck:groups": "npm exec --prefix apps/groups -- tsc --noEmit --project apps/groups/tsconfig.json",
     "build": "turbo run build",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",

@@ -333,8 +333,18 @@ describe('default relay sets', () => {
   it('ships exactly the note-serving relays, in order', () => {
     // A default list is a starting point, not a policy: a reader replaces.
     expect([...DEFAULT_RELAYS]).toEqual([
+      'wss://relay.primal.net',
+      'wss://relay.nostr.com',
       'wss://nos.lol',
+      'wss://relay.snort.social',
+      'wss://relay.damus.io',
+      'wss://relay.nostr.band',
+      'wss://relay.nos.social',
+      'wss://nostr.bitcoiner.social',
       'wss://nostr.mom',
+      'wss://relay2.veganostr.com',
+      'wss://nostr.data.haus',
+      'wss://poster.place/relay',
     ])
   })
 

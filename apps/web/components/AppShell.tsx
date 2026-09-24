@@ -8,7 +8,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { profileDisplayName } from "@nostrich/nostr";
 import type { Hex } from "@nostrich/nostr";
 
-import { asset } from "../lib/assets";
+import { BRAND } from "../config/brand";
 import { hidesChrome, useChromeAutoHide } from "../lib/chrome";
 import { npubOf } from "../lib/format";
 import { homePressIntent } from "../lib/home-tap";
@@ -59,7 +59,7 @@ const COLUMN = {
   aside: "aside-column hidden shrink-0 pt-[17px] min-[1080px]:block w-[350px] ml-[30px]",
 } as const;
 
-const WIDE_ROUTES: readonly string[] = ["/chat"];
+const WIDE_ROUTES: readonly string[] = ["/chat", "/groups"];
 
 export function AppShell({
   children,
@@ -395,15 +395,10 @@ function MobileHeader(): React.ReactNode {
 
         <Link
           href="/"
-          aria-label="Nostrich home"
+          aria-label={`${BRAND.displayName} home`}
           className="flex items-center justify-center"
         >
-          {/* eslint-disable-next-line @next/next/no-img-element -- static asset, fixed size. */}
-          <img
-            src={asset("/logo-horizontal.svg")}
-            alt="Nostrich"
-            className="h-10 w-auto"
-          />
+          <span className="text-xl font-bold tracking-tight text-text">{BRAND.displayName}</span>
         </Link>
 
         {/* The right column stays EMPTY when signed. */}

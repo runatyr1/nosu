@@ -1,271 +1,199 @@
-<div align="center">
+# Nostrix — Research and Implementation
 
-<img src="apps/web/public/logo.svg" alt="" width="96" height="96">
+Selected brand: **Nostrix**. Intended domain: **nostrix.net**. Project directory: `nostrix/`.
 
-# Nostrich
+The current implementation plan is maintained in the separate internal documentation repository. Status: **first source-preserving integration implemented; static checks and initial browser bridge verification pass, cross-client publication verification remains**.
 
-**Nostrich is a free and open-source Nostr client.**
+## First implementation
 
-Your keys are your account. Your notes live on relays anyone can run.
+Nostrix currently combines two retained applications:
 
-[**nostrich.org**](https://nostrich.org)
+| Path | Responsibility |
+| --- | --- |
+| `apps/web` and `packages/*` | Nostrich-derived social shell and shared packages |
+| `apps/groups` | Armada group client with Concord and NIP-29/Buzz behavior retained |
+| `apps/web/components/groups` | Host frame and signer RPC boundary |
+| `apps/groups/src/integration` | NIP-07-compatible host facade and account synchronization |
+| `UPSTREAM.md` | Imported revisions, licenses and local integration patch inventory |
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-000000.svg?style=flat-square)](LICENSE)
-[![Next.js 15](https://img.shields.io/badge/Next.js-15-000000?style=flat-square&logo=next.js)](https://nextjs.org)
-[![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
-[![Tests](https://img.shields.io/badge/tests-2%2C471-2ea043?style=flat-square)](#testing)
+The applications keep separate databases, relay policies, routers, dependency installations and build outputs. The Nostrich-derived workspace retains pnpm and its original lockfile; the source-preserved Armada application retains npm and a minimally reconciled derivative of its `package-lock.json`. Group Chat runs inside the Nostrix shell, while signing and NIP-44 operations delegate to the active Nostrix signer without copying its private key. Armada's service worker is disabled only in embedded mode to avoid taking control of the social application.
 
-</div>
+The workspace root preserves the complete Nostrich Git history. `apps/groups` is a Git submodule preserving Armada's independent history. After cloning Nostrix, initialize it with `git submodule update --init`; commit Armada changes inside `apps/groups` first, then commit the resulting submodule pointer in the outer repository.
 
----
+The lightweight MVP can be developed on the user's macOS machine. Install the social workspace with `pnpm install --frozen-lockfile` and Armada with `pnpm install:groups`. Run `pnpm dev:social` and `pnpm dev:groups` in separate terminals; the social shell uses `http://localhost:3400` and Armada uses `http://localhost:8080`. Development uses public relays and compatible public services. Core social/groups work needs no container database: ArmadaDB is browser IndexedDB. Ranked Trending uses the native Homebrew PostgreSQL 17 service on port `5433` plus `pnpm dev:trending`; the non-default port avoids the existing Kubernetes port-forward on `5432`. Do not run a full relay/media/voice stack on this machine; use Linux later for the self-hosted environment. Environment examples are in `.env.example` and `apps/groups/.env.example`. Both application typechecks, focused bridge/relay tests, and 4,472 Armada tests pass; the remaining Armada packaging test requires an unbuilt Electron artifact. Production builds and browser interoperability tests remain pending.
 
-## What this is
+Public-release requirement: **self-host all services operated by Nostrix that can be self-hosted**, including its relays, media storage and enabled supporting backends. Keep endpoints configurable and preserve interoperability with public relays and existing Armada communities. Infrastructure rollout follows the public-relay MVP; see the plan's self-hosting section for scope and exceptions.
 
-Nostr is a protocol, not a platform. There are no accounts to create and no
-company in the middle: a keypair **is** the identity, and posts live on
-independent relays. That has one consequence which shapes this whole codebase.
+The notes below are historical research. The implementation plan supersedes the earlier broad package-extraction proposal and naming shortlist: preserve Nostrich's structure and Armada files, connect them through a contained Group Chat module, and postpone shared-storage/relay consolidation. Brand-neutral new code does not require renaming imported upstream packages.
 
-> **Almost nothing happens on the server.** The browser talks to relays directly
-> over websockets, signs everything locally, and keeps nothing of yours here.
+## Product direction
 
-No user table exists in this project, and there never will be. The one thing
-stored server-side is a ranked list of already-public notes, rebuilt on a timer
-so every reader is not ranking the network in their own browser.
+Build one cohesive Nostr client that starts with:
 
----
+1. A polished social-media experience based on the strongest ideas and reusable code from Nostrich.
+2. A first-class **Group Chat** area implementing Armada's Concord communities plus its NIP-29/Buzz compatibility.
+3. A Nostr-native marketplace as the next major module.
+4. Additional focused Nostr capabilities later, without turning the interface into a collection of unrelated mini-apps.
 
-## Features
+The aim is not to place several websites beside each other. It is one application with one identity, navigation system, design language, relay policy, local data layer, notification model, and settings experience.
 
-<table>
-<tr>
-<td width="33%" valign="top">
+## Repositories researched
 
-### Reading
-- Following, trending and latest feeds
-- Custom feeds by hashtag and author
-- Threads with reply collapsing
-- Long-form articles (NIP-23)
-- Profiles, followers, hashtag pages
-- Full-text search (NIP-50)
-- Link previews and media galleries
-- Inline video and audio players
-- Custom emoji rendering (NIP-30)
-- Content warnings honoured (NIP-36)
+Research repositories are stored in `/Users/user1/syslab-new/1-projects-2/nostr-stuff/`; Nostrix remains in `/Users/user1/syslab-new/1-projects-2/nostrix/`.
 
-</td>
-<td width="33%" valign="top">
+| Repository | Role | License | Current finding |
+| --- | --- | --- | --- |
+| `nostrich-client` | Social client and likely initial UX basis | MIT | Current source for `nostrich.org`; React 19, Next.js 15, pnpm/Turborepo |
+| `armada-canonical` | Concord, NIP-29 and Buzz community client | AGPL-3.0 | Current Armada client source; deployed version matched `armada.buzz` v0.61.0 during research |
+| `concord` | Concord protocol specification | Repository-specific | Protocol reference and interoperability source |
+| `armada-discord-bridge` | Discord import and live bridge | AGPL-3.0-only | Optional service; includes a headless Concord core extracted from Armada |
+| `ditto-relay` | General/NIP-29 relay option | AGPL-3.0 | Replaceable infrastructure |
+| `nostr-push` | Web Push, APNs and FCM gateway | AGPL-3.0 | Optional notification infrastructure |
+| `armada-av` | Concord voice token broker and LiveKit deployment | No explicit license found | Source is public, but reuse needs license clarification |
 
-### Writing
-- Notes, replies, quotes and reposts
-- Long-form editor with markdown
-- Image and video upload to Blossom
-- Drafts that survive a reload
-- Mentions with live search
-- Emoji picker
-- Bookmarks, public or encrypted
-- Deletion requests (NIP-09)
+## Important Nostrich findings
 
-</td>
-<td width="33%" valign="top">
+Nostrich is unusually suitable as a starting point because it already separates concerns:
 
-### Identity & money
-- Browser extension (NIP-07)
-- Remote signer / bunker (NIP-46)
-- Encrypted local key (NIP-49)
-- Read-only from any npub
-- Zaps (NIP-57) and nutzaps (NIP-61)
-- Wallet over NWC (NIP-47)
-- Private chat (NIP-17)
-- Mutes, filters, spam rules
-
-</td>
-</tr>
-</table>
-
-**Signed out works.** Paste an npub, or use none at all. A client that demands a
-keypair at the door loses everyone who has never heard of Nostr.
-
----
-
-## Quick start
-
-```bash
-pnpm install
-pnpm --filter @nostrich/api db:generate
-pnpm --filter web dev
+```text
+apps/web            Next.js web application
+packages/nostr      Headless protocol core, relay pool, signers and NIPs
+packages/app        Shared React UI rendered through react-native-web
+packages/ui         Design tokens and CSS theme
+packages/hooks      Shared React hooks
+packages/api        Optional server-side trending index and worker
+packages/types      Shared Zod contracts
 ```
 
-Open <http://localhost:3400>. The feed reads from public relays straight away,
-signed in or not.
+It supports signed-out reading and NIP-07, NIP-46, NIP-49 and read-only identities through a common asynchronous signer interface. That signer boundary is a good candidate for the whole application.
 
-<details>
-<summary><strong>Full setup, with the server half</strong></summary>
+The web client is mostly client-to-relay. Its server-side dependency is optional and primarily supplies ranked trending data. Media uploads go directly to Blossom.
 
-The web app runs on its own. Postgres and the trending worker are only needed
-if you want the ranked charts.
+## Important Armada findings
 
-```bash
-# 1. Dependencies
-pnpm install
+Armada contains three community paths behind one interface:
 
-# 2. Configure
-cp .env.example .env        # then edit it
+- Concord: serverless, end-to-end encrypted communities over ordinary Nostr relays.
+- NIP-29: relay-hosted groups where the relay controls membership and moderation.
+- Buzz: an enhanced NIP-29 workspace implementation with additional features.
 
-# 3. Database (only the trending snapshot table)
-pnpm --filter @nostrich/api db:generate
-pnpm --filter @nostrich/api db:deploy
+New communities created in Armada are Concord communities. The main source tree includes the complete Concord implementation, cryptography, rekeying, local database, community UI, voice client, NIP-29/Buzz adapters, PWA support and platform wrappers.
 
-# 4. The app
-pnpm --filter web dev       # or: pnpm --filter web build && pnpm --filter web start
+## Recommended architecture
 
-# 5. Optional: the trending worker, a separate long-lived process
-TRENDING_INDEX_URL=... pnpm --filter @nostrich/api trending
-```
+Create a new monorepo rather than embedding one complete application inside the other.
 
-</details>
-
-<details>
-<summary><strong>Docker</strong></summary>
-
-```bash
-docker build -t nostrich .
-docker run -p 3400:3400 \
-  -e DATABASE_URL=postgresql://user:pass@host:5432/nostrich \
-  -e NEXT_PUBLIC_APP_URL=http://localhost:3400 \
-  nostrich
-```
-
-</details>
-
----
-
-## Project layout
-
-```
+```text
 apps/
-  web/                Next.js 15 App Router, the client itself
+  web/                 Unified browser application and navigation shell
+  mobile/              Possible later native/Capacitor or React Native shell
+
 packages/
-  nostr/              Protocol core: relay pool, signers, NIP implementations
-  app/                Shared UI, rendered through react-native-web
-  ui/                 Design tokens as plain data, plus the CSS theme
-  api/                Server-only: Prisma, the trending builder and its worker
-  types/              Zod contracts
-  hooks/              Small shared React hooks
+  identity/            Accounts and shared async signer abstraction
+  nostr-core/          Relay pool, event routing, NIP primitives and caches
+  storage/             Versioned local database and migrations
+  ui/                  Design tokens and reusable components
+  social/              Feeds, profiles, notes, articles, spaces and search
+  groups/              Concord, NIP-29 and Buzz feature module
+  marketplace/         Future marketplace events, listings and transactions
+  notifications/       Foreground notifications and optional push adapters
+  media/               Blossom upload, mirroring and media presentation
+
+services/
+  trending/            Optional ranked-public-content worker
+  av-broker/           Optional Concord voice infrastructure
+  push/                Optional push gateway deployment
 ```
 
-Workspace packages ship **raw TypeScript**. There is no build step for them:
-`main` points at `src/index.ts` and Next compiles them through
-`transpilePackages`. One less thing to be stale.
+The application shell should own global navigation. `Social`, `Group Chat`, and later `Marketplace` should be feature modules, not independently bootstrapped applications.
 
-### The protocol core
+## Integration strategy
 
-`packages/nostr` is the part worth reading first. It has no React in it and no
-DOM, so it runs anywhere.
+| Approach | Use | Assessment |
+| --- | --- | --- |
+| iframe or embedded full Armada site | Disposable proof of concept | Fast, but produces duplicate login/state/navigation and a visibly fragmented product |
+| Keep both complete apps and route between them | Early technical demonstration | Better than an iframe, but still duplicates signer, relay and storage behavior |
+| Make Nostrich the shell and port Armada feature code | First serious implementation | Good starting direction because Nostrich already has package boundaries and navigation primitives |
+| New shell with selected code from both | Long-term architecture | Cleanest and most maintainable if the integration quickly outgrows Nostrich's current assumptions |
 
-| | |
-|---|---|
-| `pool.ts` | Relay pool: connection lifecycle, dedup, EOSE handling, backoff |
-| `signers/` | Four signers behind one async interface |
-| `content.ts` | The note tokenizer: links, mentions, hashtags, emoji, invoices |
-| `zap.ts` | Zap requests and receipt validation |
-| `dm.ts` | NIP-17 gift-wrapped private messages |
-| `blossom.ts` | Media upload, mirroring and retry |
-| `spam-rules.ts` | Pure spam heuristics, shared by client and server |
+Recommended path: start from the Nostrich monorepo structure, reuse its social UI and headless Nostr/signing packages, then port Armada's Concord/NIP-29/Buzz implementation behind shared interfaces. Preserve protocol behavior and test vectors even when restructuring the code.
 
----
+## Upstream policy
 
-## Two rules worth knowing before you change anything
+Exact source compatibility is useful but not mandatory. Clean boundaries and maintainability take precedence.
 
-**Hex internally, bech32 only at the edges.** Pubkeys and event ids are
-lowercase hex everywhere in this codebase. `npub` / `note` / `nevent` / `naddr`
-are a presentation format: decode on input, encode for display, never in
-between. A bech32 string in a relay filter matches nothing and fails silently,
-which is the single most common bug in Nostr clients.
+- Keep the original repositories as read-only research/upstream clones.
+- Record the upstream repository, commit and original path for imported modules.
+- Prefer importing coherent modules with their tests instead of copying isolated functions.
+- Keep protocol logic close to upstream wire behavior; allow the application shell and UI to diverge freely.
+- Periodically compare security, protocol and interoperability changes from both upstreams.
+- Avoid Git submodules for application code that requires cross-cutting integration. They preserve history but make shared identity, routing and UI changes unnecessarily awkward.
+- Consider automated upstream-diff reports later, after module ownership stabilizes.
 
-**Private keys are touched only through `Signer`.** Four implementations, and
-the UI must work identically on all of them, because a large share of people
-will never paste a key into an app.
+AI-assisted development makes a clean rewrite or substantial refactor practical, but interoperability tests, cryptographic vectors and migration tests remain the authority. Generated code should not become a substitute for protocol-level verification.
 
-| Signer | Where the key lives |
-|---|---|
-| `Nip07Signer` | A browser extension |
-| `Nip46Signer` | Another device entirely, over a relay |
-| `PrivateKeySigner` | This browser, encrypted at rest |
-| Read-only | Nowhere. A pubkey with no signing |
+## Licensing
 
-Every `Signer` method is async even where a local key could answer
-synchronously, because an extension and a remote signer cannot, and a
-synchronous fast path would make them unimplementable.
+Nostrich is MIT licensed, so its code can be reused in an AGPL application with attribution and the MIT notice preserved.
 
----
+Armada is AGPL-3.0. A single combined client derived from Armada should be planned as AGPL-compatible and source-available to its users. Trying to preserve a proprietary license by arranging Armada code as an internal package would not be a sound architectural assumption.
 
-## Media is not hosted here
+The public `armada-av` source currently has no explicit license. Treat it as reference-only until its maintainers add a license or grant permission. Stock LiveKit and an independently implemented CORD-07 broker remain alternatives.
 
-Uploads go **from the browser straight to third-party Blossom servers** and
-never touch this server. Each is authed with a kind-24242 event signed by the
-user's own key. No accounts, no API keys.
+## Suggested first milestone
 
-Blossom is SHA-256 addressed, so a blob's identity is its hash rather than a
-path on someone's disk. Mirrored across two independent hosts it is more
-durable than one server's volume, and any server can serve it.
+1. Establish the new monorepo and unified web shell.
+2. Bring over Nostrich social browsing, identity and signer flows with minimal behavioral change.
+3. Define shared interfaces for signer, relay routing, media, profiles and local storage.
+4. Add `Group Chat` to the main navigation.
+5. Port Concord community discovery, creation, invites and text channels first.
+6. Add rekeying/moderation, attachments, voice, then NIP-29/Buzz compatibility.
+7. Validate interoperability against unchanged Armada and another Concord client.
 
-There is no media volume and no upload endpoint in this repository. If you add
-one, put it on its own host: because content is hash-addressed, it slots in as
-another mirror rather than a rewrite.
+This milestone deliberately postpones marketplace work until the shared core and the first two major experiences are stable.
 
----
+## Decisions still open
 
-## Configuration
+- Product name and visual identity.
+- Whether the first shell remains Next.js or becomes a client-only Vite application.
+- Whether mobile should use React Native, Capacitor, or separate native shells.
+- Local database choice and migration strategy for encrypted community history.
+- Whether to adopt Nostrich's relay pool directly or define a shared interface with separate routing policies for social and Concord traffic.
+- Marketplace protocol scope and supported NIPs.
+- Final license and contribution policy for the combined repository.
 
-Every option is an environment variable, and the defaults assume you have set
-nothing. See [`.env.example`](.env.example).
+## Naming research
 
-| Variable | Needed for |
-|---|---|
-| `NEXT_PUBLIC_APP_URL` | Absolute links and social cards |
-| `DATABASE_URL` | The trending snapshot table |
-| `TRENDING_INDEX_URL` | Candidates for the trending worker. No default |
-| `PFP_CACHE_DIR` | Where resized avatars are written |
-| `UNFURL_PROXY_SECRET` | Signs image-proxy URLs |
-| `UNFURL_READER_URL` | Optional reader service for sites that refuse this server. No default |
+Preliminary collision research found no existing Nostr client named **Nostrix** in the major client directories, general web results, GitHub results, Apple App Store, Google Play, or npm as of 2026-09-23. This is not a formal trademark clearance.
 
-Relay defaults live in `packages/nostr/src/relays.ts`. A reader's own
-kind-10002 list overrides them everywhere, so the defaults are a starting
-point rather than a policy.
+`Nostrix` is already used outside Nostr: the exact GitHub username is occupied, `nostrix.com` resolves to an existing host, multiple unrelated repositories use the word, and an unrelated pharmaceutical trademark filing exists in Georgia. The npm package name and several obvious alternate domains had no active DNS record when checked, but lack of DNS does not prove that a domain is available to register.
 
----
+Fantasy-oriented shortlist:
 
-## Supported NIPs
+| Name | Theme and pronunciation | Preliminary assessment |
+| --- | --- | --- |
+| **Nostrix** | `NOS-tricks`; Nostr plus a magical/Matrix-like `-trix` ending | Best pronunciation and strongest general-product feel; no Nostr-client collision found, but globally less unique |
+| **Nostrune** | `NOS-rune` or `NOST-rune`; Nostr plus runes | Clearest fantasy connection and highly descriptive; slightly longer |
+| **Nostyr** | `NOS-teer`; Nostr plus the Norse god Týr | Very short and distinctive; spelling does not immediately communicate pronunciation, and the name is used by a music artist |
+| **Noswyrd** | `NOS-weerd`; Nostr plus the Old English concept of fate | Highly unique and atmospheric; pronunciation requires explanation |
+| **Nostgald** | `NOST-gald`; inspired by Norse *galdr*, magical songs/spells | Most unusual and ownable; least immediately understandable |
 
-`01` `04` `05` `07` `09` `10` `11` `13` `17` `18` `19` `21` `22` `23` `25`
-`27` `30` `36` `40` `44` `45` `46` `47` `49` `50` `51` `53` `56` `57` `59`
-`61` `65` `78` `89` `92` `98` `99`
+Current recommendation: **Nostrix** if approachability matters most; **Nostrune** if a clearly magical identity and stronger distinctiveness matter more.
 
----
+### Brand modularity
 
-## Testing
+Do not use the public product name as an architectural namespace. Keep private workspace packages under a neutral scope such as `@client/*`, and keep product-specific values in one versioned brand configuration:
 
-```bash
-pnpm typecheck     # strict, with noUncheckedIndexedAccess
-pnpm test          # every package
+```text
+config/brand.ts
+  displayName
+  shortName
+  description
+  publicOrigin
+  deepLinkScheme
+  nostrClientTag
+  supportLinks
+  assetSet
 ```
 
-2,471 tests across 195 files. The protocol core is tested against real event fixtures
-rather than hand-made ones, because a fixture you wrote yourself only proves
-the parser agrees with itself.
-
----
-
-## Contributing
-
-Issues and pull requests are welcome.
-
-- `pnpm typecheck && pnpm test` must pass
-- Match the style of the file you are editing
-- Explain *why* in the commit, not *what*
-
----
-
-## License
-
-[MIT](LICENSE)
+Generate web metadata, manifests, share links, installer labels and legal-page names from that configuration. Keep logos and store artwork in replaceable brand asset directories. Native bundle identifiers and published deep-link domains are migration-sensitive, so they should derive from a stable organization identity rather than the temporary product name where platform rules allow it.

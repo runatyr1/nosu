@@ -11,8 +11,6 @@ import {
   type Profile,
 } from '@nostrich/nostr'
 
-import { asset } from '../lib/assets'
-
 /** How long an account switch waits for Home before giving up and switching anyway. */
 const SWITCH_DEADLINE_MS = 1_500
 import { PATHS } from '@nostrich/app'
@@ -37,6 +35,7 @@ import {
   useIsNativeShell,
   useNativeShellAccounts,
 } from '../lib/native-shell'
+import { BRAND } from '../config/brand'
 
 /** The navigation rail: an icon strip that grows labels where there is room for them. */
 
@@ -54,6 +53,7 @@ interface NavItem {
 export const NAV_ITEMS: NavItem[] = [
   { href: '/', label: 'Home', icon: 'home' },
   { href: '/explore', label: 'Explore', icon: 'search', svg: 'M10.5 17.5a7 7 0 1 1 0-14 7 7 0 0 1 0 14zM21 21l-5.5-5.5' },
+  { href: '/groups', label: 'Group Chat', icon: 'forum', auth: true },
   { href: '/notifications', label: 'Notifications', icon: 'notifications', auth: true },
   // "Chat", not "Messages" or "DMs".
   { href: '/chat', label: 'Chat', icon: 'chat_bubble', svg: CHAT_BUBBLE_PATH, auth: true },
@@ -109,17 +109,13 @@ export function LeftRail({ onCompose }: { onCompose: () => void }): React.ReactN
     <div className="sidebar sticky top-[17px] z-40 flex h-[calc(100dvh-17px)] flex-col">
       <div className="flex flex-1 flex-col items-center min-[1265px]:items-stretch">
         {/* Takes ROW's padding so the mark lines up with the nav glyphs below. */}
-        <Link href="/" aria-label="Nostrich home" className="flex items-center rounded-lg px-3 min-[1265px]:w-full">
-          {/* The brand kit's own horizontal lockup, used whole rather than reassembled. */}
-          {/* eslint-disable-next-line @next/next/no-img-element -- static asset, fixed size. */}
-          <img
-            src={asset('/logo-horizontal.svg')}
-            alt="Nostrich"
-            className="hidden h-14 w-auto shrink-0 min-[1265px]:block"
-          />
-          {/* Icon alone on the narrow rail, where the wordmark has no room. */}
-          {/* eslint-disable-next-line @next/next/no-img-element -- static asset, fixed size. */}
-          <img src={asset('/logo.svg')} alt="Nostrich" className="size-12 shrink-0 rounded-xl min-[1265px]:hidden" />
+        <Link href="/" aria-label={`${BRAND.displayName} home`} className="flex items-center rounded-lg px-3 min-[1265px]:w-full">
+          <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-text text-2xl font-bold text-bg">
+            N
+          </span>
+          <span className="ml-3 hidden text-2xl font-bold tracking-tight text-text min-[1265px]:inline">
+            {BRAND.displayName}
+          </span>
         </Link>
 
         <nav aria-label="Primary" className="mt-4 w-full">

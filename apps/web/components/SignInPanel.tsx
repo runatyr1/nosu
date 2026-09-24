@@ -35,6 +35,7 @@ import { ContentLink } from './ContentLink'
 import { Avatar } from './Avatar'
 import { QrCode } from './QrCode'
 import { MAX_ACCOUNTS, sessionPubkey, useSession } from './SessionProvider'
+import { BRAND } from '../config/brand'
 
 /** The five ways. */
 
@@ -400,7 +401,7 @@ function NewKeyTab({ busy, setBusy, setError, adopt, finish, fail }: TabProps): 
           {[
             { term: 'npub', detail: 'Your public key. This is how others follow you.' },
             { term: 'nsec', detail: 'Your secret private key. It signs your posts.' },
-            { term: 'Portable', detail: 'Works in every Nostr app, not just Nostrich.' },
+            { term: 'Portable', detail: `Works in every Nostr app, not just ${BRAND.displayName}.` },
           ].map(fact => (
             <div key={fact.term} className="bg-bg px-4 py-3.5">
               <dt className="font-mono text-[10.5px] uppercase tracking-[0.12em] text-text-faint">
@@ -442,7 +443,7 @@ function NewKeyTab({ busy, setBusy, setError, adopt, finish, fail }: TabProps): 
               {
                 term: 'One key, many apps',
                 detail:
-                  'Your key works across Nostr apps. Nostrich is one way to access the network, not the network itself.',
+                  `Your key works across Nostr apps. ${BRAND.displayName} is one way to access the network, not the network itself.`,
               },
             ].map(item => (
               <div key={item.term}>
@@ -550,7 +551,7 @@ function NewKeyTab({ busy, setBusy, setError, adopt, finish, fail }: TabProps): 
         disabled={!saved || busy}
         className={`${BUTTON_PRIMARY} disabled:cursor-not-allowed disabled:opacity-40`}
       >
-        {busy ? 'Working…' : 'Start using Nostrich'}
+        {busy ? 'Working…' : `Start using ${BRAND.displayName}`}
       </button>
     </div>
   )
@@ -614,8 +615,8 @@ function ExtensionTab({ busy, setBusy, setError, setNotice, adopt, finish, fail 
     <div className="space-y-3">
       <Info tone="good">
         The safest option on desktop. A NIP-07 extension like Alby or nos2x keeps your private
-        key and signs for you. Your key never enters Nostrich, and you stay signed in through the
-        extension.
+        key and signs for you. Your key never enters {BRAND.displayName}, and you stay signed in
+        through the extension.
       </Info>
       <button type="button" onClick={() => void go()} disabled={busy} className={BUTTON_PRIMARY}>
         Continue with extension
@@ -677,8 +678,8 @@ function RemoteTab({ busy, setBusy, setError, setNotice, adopt, finish, fail }: 
         return createNostrConnectInvite({
           /* `DEFAULT_SIGNER_RELAYS`, not the first three read relays. */
           relays: held === undefined ? [...DEFAULT_SIGNER_RELAYS] : (held.relays as RelayUrl[]),
-          name: 'Nostrich',
-          url: 'https://nostrich.org',
+          name: BRAND.displayName,
+          url: BRAND.publicOrigin,
           perms: SIGNER_PERMS,
           onAuthUrl: handleAuthUrl,
           ...(held === undefined
@@ -798,8 +799,8 @@ function RemoteTab({ busy, setBusy, setError, setNotice, adopt, finish, fail }: 
     <div className="space-y-4">
       <Info tone="good">
         Your private key stays with your own remote signer, such as Amber on your phone or a
-        self-hosted bunker. Nostrich only sends signing requests and never sees or stores your
-        key. Scan the QR code with your signer, or paste its{' '}
+        self-hosted bunker. {BRAND.displayName} only sends signing requests and never sees or stores
+        your key. Scan the QR code with your signer, or paste its{' '}
         <code className="font-mono">bunker://</code> URI below.
       </Info>
 
@@ -902,8 +903,8 @@ function NsecTab({ busy, setBusy, setError, adopt, finish, fail }: TabProps): Re
       {/* WHAT ACTUALLY HAPPENS TO THE KEY. */}
       <Info tone="neutral" title="How it works">
         Your private key is saved only in your browser, so you can stay signed in. If you set a
-        password, it&rsquo;s stored encrypted for added security. Your key is never sent to
-        Nostrich, and all signing happens locally on your device.
+        password, it&rsquo;s stored encrypted for added security. Your key is never sent to{' '}
+        {BRAND.displayName}, and all signing happens locally on your device.
       </Info>
 
       <form onSubmit={event => void submit(event)} className="space-y-3">

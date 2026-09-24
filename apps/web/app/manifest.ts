@@ -1,14 +1,14 @@
 import type { MetadataRoute } from 'next'
 
 import { asset } from '../lib/assets'
+import { BRAND } from '../config/brand'
 
 /** The web app manifest. */
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Nostrich',
-    short_name: 'Nostrich',
-    description:
-      'A Nostr client. Your keys, your posts, your relays, read and write the open social network from anywhere.',
+    name: BRAND.displayName,
+    short_name: BRAND.shortName,
+    description: BRAND.description,
     /* `id` pins the app's identity independently of `start_url`. */
     id: '/',
     start_url: '/',

@@ -13,7 +13,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "trending": "tsx src/trending/worker.ts"
+    "trending": "node --env-file-if-exists=.env --import tsx src/trending/worker.ts"
   },
   "dependencies": {
     "@nostrich/nostr": "workspace:*",

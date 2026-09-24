@@ -10,6 +10,7 @@ import { useRelayPrefs } from '../lib/relay-prefs'
 import { useRelayStatus } from '../lib/relay-status'
 import { BUTTON_PRIMARY, BUTTON_QUIET, INPUT_BASE } from '../lib/styles'
 import { sessionPubkey, useSession } from './SessionProvider'
+import { BRAND } from '../config/brand'
 
 /** Relay management, as a section of Settings rather than a page of its own. */
 /** Named for what the relay DOES for the reader, not for the tag it becomes. */
@@ -283,8 +284,8 @@ export function RelaySettings(): React.ReactNode {
           className={`${BUTTON_QUIET} flex-1`}
         >
           {/* Shorter on a phone: two buttons sharing a 430px row wrapped their labels. */}
-          <span className="sm:hidden">Nostrich defaults</span>
-          <span className="hidden sm:inline">Use Nostrich defaults</span>
+          <span className="sm:hidden">{BRAND.displayName} defaults</span>
+          <span className="hidden sm:inline">Use {BRAND.displayName} defaults</span>
         </button>
         <button
           type="button"

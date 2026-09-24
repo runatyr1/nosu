@@ -6,15 +6,23 @@ export type RelayEntry = { url: RelayUrl; policy: RelayPolicy }
 /** NIP-65 relay list metadata. */
 export const RELAY_LIST_KIND = 10002
 
-/** Starting relays for a user who has not published a NIP-65 list yet. */
+/**
+ * Provisional Nostrix defaults for an account without a NIP-65 list.
+ * Keep this list centrally configurable: operator review is still pending.
+ */
 export const DEFAULT_RELAYS: readonly RelayUrl[] = Object.freeze([
+  'wss://relay.primal.net',
+  'wss://relay.nostr.com',
   'wss://nos.lol',
-  // Added 2026-08-16, chosen by measurement rather than reputation: each was queried.
-
-  // nostr.mom +166 new.
-
-  // Scored well and still not here, all by operator decision: nostrelites.org.
+  'wss://relay.snort.social',
+  'wss://relay.damus.io',
+  'wss://relay.nostr.band',
+  'wss://relay.nos.social',
+  'wss://nostr.bitcoiner.social',
   'wss://nostr.mom',
+  'wss://relay2.veganostr.com',
+  'wss://nostr.data.haus',
+  'wss://poster.place/relay',
 ])
 
 /** The default set with its policies. */

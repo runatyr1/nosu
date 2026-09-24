@@ -19,6 +19,7 @@ import { sessionPubkey, useSession } from './SessionProvider'
 import { usePathname, useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { encodeNote, profileDisplayName, type Hex, type NostrEvent } from '@nostrich/nostr'
+import { BRAND } from '../config/brand'
 
 import { getCachedEvent, rememberEvent, rememberEvents } from '../lib/event-cache'
 import { getPool } from '../lib/pool'
@@ -160,22 +161,18 @@ export function RightRail(): React.ReactNode {
       <WhoToFollow />
 
       <footer className="mr-3 space-y-2 pb-8 text-xs leading-relaxed text-text-faint">
-        <p>© 2026 Nostrich. All rights reserved.</p>
+        <p>© 2026 {BRAND.displayName}.</p>
         <p>
-          Nostrich is a free and open-source Nostr client. Notes, profiles and media live on Nostr
-          relays and are not hosted by Nostrich.{' '}
-          {/* An absolute URL, not a route: this points at the project's own donate page
-              wherever the client is running. The one link in the footer, so it has to look
-              like one. */}
+          {BRAND.displayName} is a free and open-source Nostr client. Notes, profiles and media live
+          on Nostr relays and are not hosted by {BRAND.displayName}. Social experience based on{' '}
           <a
-            href="https://nostrich.org/donate"
+            href="https://github.com/nostrichOS/nostrich-client"
             target="_blank"
             rel="noreferrer"
             className="font-semibold text-text underline underline-offset-2 hover:text-text-muted"
           >
-            Donate here
-          </a>{' '}
-          to support its development.
+            Nostrich
+          </a>.
         </p>
       </footer>
     </div>

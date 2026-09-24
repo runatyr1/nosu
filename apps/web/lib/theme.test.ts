@@ -68,7 +68,7 @@ describe('theme preference', () => {
     applyCustomThemeBackground('custom-dark', 'forest')
 
     expect(readCustomThemeBackground('custom-dark')).toBe('forest')
-    expect(document.documentElement.style.getPropertyValue('--nostrix-custom-theme-bg')).toBe(
+    expect(document.documentElement.style.getPropertyValue('--nosu-custom-theme-bg')).toBe(
       '#101b17',
     )
     expect(readThemePreference()).toBe('custom-dark')

@@ -38,4 +38,4 @@ const lightMap = Object.fromEntries(CUSTOM_LIGHT_BACKGROUNDS.map(item => [item.i
 export const CUSTOM_THEME_BOOTSTRAP_SCRIPT =
   `(function(){try{var t=localStorage.getItem("nostrich:theme"),m=t==="custom-dark"?${JSON.stringify(
     darkMap,
-  )}:t==="custom-light"?${JSON.stringify(lightMap)}:null;if(!m)return;var k=t==="custom-dark"?"nostrich:theme-custom-dark":"nostrich:theme-custom-light",v=localStorage.getItem(k),c=m[v]||Object.values(m)[0],r=document.documentElement;r.style.setProperty("--nostrix-custom-theme-bg",c);var q=document.querySelector('meta[name="theme-color"]');if(q)q.setAttribute("content",c)}catch(e){}})();`
+  )}:t==="custom-light"?${JSON.stringify(lightMap)}:null;if(!m)return;var k=t==="custom-dark"?"nostrich:theme-custom-dark":"nostrich:theme-custom-light",v=localStorage.getItem(k),c=m[v]||Object.values(m)[0],r=document.documentElement;r.style.setProperty("--nosu-custom-theme-bg",c);var q=document.querySelector('meta[name="theme-color"]');if(q)q.setAttribute("content",c)}catch(e){}})();`

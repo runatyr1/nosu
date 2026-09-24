@@ -31,12 +31,12 @@ function errorMessage(error: unknown): string {
 
 function bridgeLog(event: string, detail: Record<string, unknown> = {}): void {
   if (process.env.NODE_ENV !== 'development') return
-  console.debug(`[nostrix groups host] ${event} ${JSON.stringify(detail)}`)
+  console.debug(`[nosu groups host] ${event} ${JSON.stringify(detail)}`)
 }
 
 /**
  * Hosts the source-preserved Armada application and exposes only the active
- * Nostrix signer's public NIP-07 surface. Private key material never crosses
+ * Nosu signer's public NIP-07 surface. Private key material never crosses
  * this boundary.
  */
 export function GroupChatFrame(): React.ReactNode {
@@ -104,7 +104,7 @@ export function GroupChatFrame(): React.ReactNode {
     if (!src || !frame.current?.contentWindow) return
     const root = document.documentElement
     const styles = getComputedStyle(root)
-    const customBackground = styles.getPropertyValue('--nostrix-custom-theme-bg').trim()
+    const customBackground = styles.getPropertyValue('--nosu-custom-theme-bg').trim()
     const message: GroupsBridgeTheme = {
       protocol: GROUPS_BRIDGE_PROTOCOL,
       type: 'theme',
@@ -173,7 +173,7 @@ export function GroupChatFrame(): React.ReactNode {
       }
 
       if (session.status !== 'signed') {
-        respond({ error: 'Sign in to Nostrix with a signing-capable account first.' })
+        respond({ error: 'Sign in to Nosu with a signing-capable account first.' })
         return
       }
 
@@ -236,7 +236,7 @@ export function GroupChatFrame(): React.ReactNode {
     <iframe
       ref={frame}
       src={src}
-      title="Nostrix Group Chat"
+      title="Nosu Group Chat"
       onLoad={() => {
         bridgeLog('frame:load', { src })
         postSession()

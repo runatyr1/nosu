@@ -1,4 +1,4 @@
 packages:
   - "apps/*"
-  - "!apps/groups"
+  - "!apps/armada"
   - "packages/*"

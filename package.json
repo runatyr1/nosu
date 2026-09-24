@@ -1,5 +1,5 @@
 {
-  "name": "nostrix",
+  "name": "nosu",
   "private": true,
   "packageManager": "pnpm@9.12.3",
   "engines": {
@@ -8,10 +8,10 @@
   "scripts": {
     "dev": "turbo run dev",
     "dev:social": "pnpm --filter web dev",
-    "dev:groups": "npm --prefix apps/groups run dev",
+    "dev:groups": "npm --prefix apps/armada run dev",
     "dev:trending": "pnpm --filter @nostrich/api trending",
-    "install:groups": "npm_config_cache=${TMPDIR:-/tmp}/nostrix-npm-cache npm --prefix apps/groups ci",
-    "typecheck:groups": "npm exec --prefix apps/groups -- tsc --noEmit --project apps/groups/tsconfig.json",
+    "install:groups": "npm_config_cache=${TMPDIR:-/tmp}/nosu-npm-cache npm --prefix apps/armada ci",
+    "typecheck:groups": "npm exec --prefix apps/armada -- tsc --noEmit --project apps/armada/tsconfig.json",
     "build": "turbo run build",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",

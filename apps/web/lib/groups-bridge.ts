@@ -1,4 +1,4 @@
-export const GROUPS_BRIDGE_PROTOCOL = 'nostrix-groups-v1' as const
+export const GROUPS_BRIDGE_PROTOCOL = 'nosu-groups-v1' as const
 
 export type GroupsBridgeMethod =
   | 'getPublicKey'

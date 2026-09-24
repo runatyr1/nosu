@@ -7,7 +7,7 @@ export type RelayEntry = { url: RelayUrl; policy: RelayPolicy }
 export const RELAY_LIST_KIND = 10002
 
 /**
- * Provisional Nostrix defaults for an account without a NIP-65 list.
+ * Provisional Nosu defaults for an account without a NIP-65 list.
  * Keep this list centrally configurable: operator review is still pending.
  */
 export const DEFAULT_RELAYS: readonly RelayUrl[] = Object.freeze([

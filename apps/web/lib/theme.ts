@@ -66,7 +66,7 @@ export const THEME_PALETTES: readonly ThemePalette[] = [
 export { CUSTOM_DARK_BACKGROUNDS, CUSTOM_LIGHT_BACKGROUNDS }
 export type { CustomThemeBackground, CustomThemeMode }
 
-const THEME_CHANGE_EVENT = 'nostrix:theme-change'
+const THEME_CHANGE_EVENT = 'nosu:theme-change'
 
 function isThemePreference(value: unknown): value is ThemePreference {
   return isThemeName(value)
@@ -107,12 +107,12 @@ function paintCustomBackground(theme: Theme): void {
   if (typeof document === 'undefined') return
   const root = document.documentElement
   if (theme !== 'custom-dark' && theme !== 'custom-light') {
-    root.style.removeProperty('--nostrix-custom-theme-bg')
+    root.style.removeProperty('--nosu-custom-theme-bg')
     return
   }
   const selected = readCustomThemeBackground(theme)
   const choice = customChoices(theme).find(item => item.id === selected) ?? customChoices(theme)[0]
-  root.style.setProperty('--nostrix-custom-theme-bg', choice.color)
+  root.style.setProperty('--nosu-custom-theme-bg', choice.color)
 }
 
 /** Read the palette already painted on the root by the pre-hydration script. */

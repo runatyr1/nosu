@@ -1,28 +1,28 @@
-# Nostrix — Research and Implementation
+# Nosu — Research and Implementation
 
-Selected brand: **Nostrix**. Intended domain: **nostrix.net**. Project directory: `nostrix/`.
+Selected brand: **Nosu**. Intended domain: **nosu.social**. Project directory: `nosu/`.
 
 The current implementation plan is maintained in the separate internal documentation repository. Status: **first source-preserving integration implemented; static checks and initial browser bridge verification pass, cross-client publication verification remains**.
 
 ## First implementation
 
-Nostrix currently combines two retained applications:
+Nosu currently combines two retained applications:
 
 | Path | Responsibility |
 | --- | --- |
 | `apps/web` and `packages/*` | Nostrich-derived social shell and shared packages |
-| `apps/groups` | Armada group client with Concord and NIP-29/Buzz behavior retained |
+| `apps/armada` | Armada group client with Concord and NIP-29/Buzz behavior retained |
 | `apps/web/components/groups` | Host frame and signer RPC boundary |
-| `apps/groups/src/integration` | NIP-07-compatible host facade and account synchronization |
+| `apps/armada/src/integration` | NIP-07-compatible host facade and account synchronization |
 | `UPSTREAM.md` | Imported revisions, licenses and local integration patch inventory |
 
-The applications keep separate databases, relay policies, routers, dependency installations and build outputs. The Nostrich-derived workspace retains pnpm and its original lockfile; the source-preserved Armada application retains npm and a minimally reconciled derivative of its `package-lock.json`. Group Chat runs inside the Nostrix shell, while signing and NIP-44 operations delegate to the active Nostrix signer without copying its private key. Armada's service worker is disabled only in embedded mode to avoid taking control of the social application.
+The applications keep separate databases, relay policies, routers, dependency installations and build outputs. The Nostrich-derived workspace retains pnpm and its original lockfile; the source-preserved Armada application retains npm and a minimally reconciled derivative of its `package-lock.json`. Group Chat runs inside the Nosu shell, while signing and NIP-44 operations delegate to the active Nosu signer without copying its private key. Armada's service worker is disabled only in embedded mode to avoid taking control of the social application.
 
-The workspace root preserves the complete Nostrich Git history. `apps/groups` is a Git submodule preserving Armada's independent history. After cloning Nostrix, initialize it with `git submodule update --init`; commit Armada changes inside `apps/groups` first, then commit the resulting submodule pointer in the outer repository.
+The workspace root preserves the complete Nostrich Git history. `apps/armada` is a Git submodule preserving Armada's independent history. After cloning Nosu, initialize it with `git submodule update --init`; commit Armada changes inside `apps/armada` first, then commit the resulting submodule pointer in the outer repository.
 
-The lightweight MVP can be developed on the user's macOS machine. Install the social workspace with `pnpm install --frozen-lockfile` and Armada with `pnpm install:groups`. Run `pnpm dev:social` and `pnpm dev:groups` in separate terminals; the social shell uses `http://localhost:3400` and Armada uses `http://localhost:8080`. Development uses public relays and compatible public services. Core social/groups work needs no container database: ArmadaDB is browser IndexedDB. Ranked Trending uses the native Homebrew PostgreSQL 17 service on port `5433` plus `pnpm dev:trending`; the non-default port avoids the existing Kubernetes port-forward on `5432`. Do not run a full relay/media/voice stack on this machine; use Linux later for the self-hosted environment. Environment examples are in `.env.example` and `apps/groups/.env.example`. Both application typechecks, focused bridge/relay tests, and 4,472 Armada tests pass; the remaining Armada packaging test requires an unbuilt Electron artifact. Production builds and browser interoperability tests remain pending.
+The lightweight MVP can be developed on the user's macOS machine. Install the social workspace with `pnpm install --frozen-lockfile` and Armada with `pnpm install:groups`. Run `pnpm dev:social` and `pnpm dev:groups` in separate terminals; the social shell uses `http://localhost:3400` and Armada uses `http://localhost:8080`. Development uses public relays and compatible public services. Core social/groups work needs no container database: ArmadaDB is browser IndexedDB. Ranked Trending uses the native Homebrew PostgreSQL 17 service on port `5433` plus `pnpm dev:trending`; the non-default port avoids the existing Kubernetes port-forward on `5432`. Do not run a full relay/media/voice stack on this machine; use Linux later for the self-hosted environment. Environment examples are in `.env.example` and `apps/armada/.env.example`. Both application typechecks, focused bridge/relay tests, and 4,472 Armada tests pass; the remaining Armada packaging test requires an unbuilt Electron artifact. Production builds and browser interoperability tests remain pending.
 
-Public-release requirement: **self-host all services operated by Nostrix that can be self-hosted**, including its relays, media storage and enabled supporting backends. Keep endpoints configurable and preserve interoperability with public relays and existing Armada communities. Infrastructure rollout follows the public-relay MVP; see the plan's self-hosting section for scope and exceptions.
+Public-release requirement: **self-host all services operated by Nosu that can be self-hosted**, including its relays, media storage and enabled supporting backends. Keep endpoints configurable and preserve interoperability with public relays and existing Armada communities. Infrastructure rollout follows the public-relay MVP; see the plan's self-hosting section for scope and exceptions.
 
 The notes below are historical research. The implementation plan supersedes the earlier broad package-extraction proposal and naming shortlist: preserve Nostrich's structure and Armada files, connect them through a contained Group Chat module, and postpone shared-storage/relay consolidation. Brand-neutral new code does not require renaming imported upstream packages.
 
@@ -39,7 +39,7 @@ The aim is not to place several websites beside each other. It is one applicatio
 
 ## Repositories researched
 
-Research repositories are stored in `/Users/user1/syslab-new/1-projects-2/nostr-stuff/`; Nostrix remains in `/Users/user1/syslab-new/1-projects-2/nostrix/`.
+Research repositories are stored in `/Users/user1/syslab-new/1-projects-2/nostr-stuff/`; Nosu remains in `/Users/user1/syslab-new/1-projects-2/nosu/`.
 
 | Repository | Role | License | Current finding |
 | --- | --- | --- | --- |
@@ -154,7 +154,7 @@ This milestone deliberately postpones marketplace work until the shared core and
 
 ## Decisions still open
 
-- Product name and visual identity.
+- Final visual identity and assets for the confirmed Nosu name.
 - Whether the first shell remains Next.js or becomes a client-only Vite application.
 - Whether mobile should use React Native, Capacitor, or separate native shells.
 - Local database choice and migration strategy for encrypted community history.
@@ -164,21 +164,19 @@ This milestone deliberately postpones marketplace work until the shared core and
 
 ## Naming research
 
-Preliminary collision research found no existing Nostr client named **Nostrix** in the major client directories, general web results, GitHub results, Apple App Store, Google Play, or npm as of 2026-09-23. This is not a formal trademark clearance.
-
-`Nostrix` is already used outside Nostr: the exact GitHub username is occupied, `nostrix.com` resolves to an existing host, multiple unrelated repositories use the word, and an unrelated pharmaceutical trademark filing exists in Georgia. The npm package name and several obvious alternate domains had no active DNS record when checked, but lack of DNS does not prove that a domain is available to register.
+The selected name is **Nosu**, with **nosu.social** registered by the user. Public Apple App Store and Google Play searches found no app named exactly “Nosu” on 2026-09-24. Apple has unrelated listings named “Nosu the Dinosaur” and “Nōsu”; neither is the exact name. Apple can reserve an unpublished localized name in App Store Connect, so creating the actual app record is the only definitive availability check. The former `nos.social` Nostr project appears inactive and `nosu.io` redirects rather than presenting an active Nosu product. This remains preliminary collision research, not formal trademark clearance.
 
 Fantasy-oriented shortlist:
 
 | Name | Theme and pronunciation | Preliminary assessment |
 | --- | --- | --- |
-| **Nostrix** | `NOS-tricks`; Nostr plus a magical/Matrix-like `-trix` ending | Best pronunciation and strongest general-product feel; no Nostr-client collision found, but globally less unique |
+| **Nosu** | `NO-soo` / `NO-su`; short Nostr-adjacent coined name | Selected: shortest, clearest cross-language pronunciation and strongest domain presentation |
 | **Nostrune** | `NOS-rune` or `NOST-rune`; Nostr plus runes | Clearest fantasy connection and highly descriptive; slightly longer |
 | **Nostyr** | `NOS-teer`; Nostr plus the Norse god Týr | Very short and distinctive; spelling does not immediately communicate pronunciation, and the name is used by a music artist |
 | **Noswyrd** | `NOS-weerd`; Nostr plus the Old English concept of fate | Highly unique and atmospheric; pronunciation requires explanation |
 | **Nostgald** | `NOST-gald`; inspired by Norse *galdr*, magical songs/spells | Most unusual and ownable; least immediately understandable |
 
-Current recommendation: **Nostrix** if approachability matters most; **Nostrune** if a clearly magical identity and stronger distinctiveness matter more.
+Current decision: **Nosu**, using **nosu.social**.
 
 ### Brand modularity
 

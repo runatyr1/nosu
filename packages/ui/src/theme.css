@@ -423,11 +423,11 @@
 }
 
 .theme-custom-dark {
-  --role-bg: var(--nostrix-custom-theme-bg, #0a0a0a);
+  --role-bg: var(--nosu-custom-theme-bg, #0a0a0a);
 }
 
 .theme-custom-light {
-  --role-bg: var(--nostrix-custom-theme-bg, #ffffff);
+  --role-bg: var(--nosu-custom-theme-bg, #ffffff);
 }
 
 @theme inline {

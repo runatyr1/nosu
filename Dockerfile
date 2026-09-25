@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # Image for the Nostrich web client (apps/web).
 
-FROM node:20-alpine AS base
+FROM node:22-alpine AS base
 RUN apk add --no-cache libc6-compat openssl
 RUN corepack enable
 WORKDIR /repo
@@ -9,6 +9,8 @@ WORKDIR /repo
 # ---- build ----
 FROM base AS build
 ENV NEXT_TELEMETRY_DISABLED=1
+ARG NEXT_PUBLIC_APP_URL
+ARG NEXT_PUBLIC_GROUPS_APP_URL=/groups-app/
 
 # Manifests first, sources later, so the install layer stays cached until the
 # lockfile actually changes.
@@ -27,14 +29,18 @@ RUN pnpm install --frozen-lockfile --filter web...
 COPY packages/api/prisma packages/api/prisma
 RUN pnpm --filter @nostrich/api db:generate
 
-COPY . .
+COPY apps/web/ apps/web/
+COPY packages/ packages/
 RUN pnpm --filter web build
 
 # ---- runner ----
 FROM build AS runner
+COPY infra/privacy-guard.sh /usr/local/bin/nosu-entrypoint
+RUN chmod +x /usr/local/bin/nosu-entrypoint
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3400
 ENV HOSTNAME=0.0.0.0
 EXPOSE 3400
+ENTRYPOINT ["/usr/local/bin/nosu-entrypoint"]
 CMD ["pnpm", "--filter", "web", "start"]

@@ -1,0 +1,127 @@
+name: nosu
+
+x-app-build: &app-build
+  context: ..
+  dockerfile: Dockerfile
+  args:
+    NEXT_PUBLIC_APP_URL: ${NOSU_PUBLIC_URL:?set NOSU_PUBLIC_URL in infra/.env}
+    NEXT_PUBLIC_GROUPS_APP_URL: /groups-app/
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: nostrich
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in infra/.env}
+      POSTGRES_DB: nostrich
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U nostrich -d nostrich']
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  migrate:
+    image: nosu-app:local
+    build: *app-build
+    command: [pnpm, --filter, '@nostrich/api', 'db:deploy']
+    environment:
+      DATABASE_URL: ${NOSU_DATABASE_URL:?set NOSU_DATABASE_URL in infra/.env}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: 'no'
+
+  nosu:
+    image: nosu-app:local
+    build: *app-build
+    environment:
+      DATABASE_URL: ${NOSU_DATABASE_URL:?set NOSU_DATABASE_URL in infra/.env}
+      NEXT_PUBLIC_APP_URL: ${NOSU_PUBLIC_URL:?set NOSU_PUBLIC_URL in infra/.env}
+      NEXT_PUBLIC_GROUPS_APP_URL: /groups-app/
+      PFP_CACHE_DIR: /data/pfp
+      UNFURL_PROXY_SECRET: ${UNFURL_PROXY_SECRET:?set UNFURL_PROXY_SECRET in infra/.env}
+      NOSU_PRIVACY_MODE: ${NOSU_PRIVACY_MODE:-false}
+    volumes:
+      - pfp-cache:/data/pfp
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3400/api/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      start_period: 60s
+      retries: 5
+    restart: unless-stopped
+
+  trending:
+    image: nosu-app:local
+    command: [pnpm, --filter, '@nostrich/api', trending]
+    environment:
+      DATABASE_URL: ${NOSU_DATABASE_URL:?set NOSU_DATABASE_URL in infra/.env}
+      TRENDING_INDEX_URL: ${TRENDING_INDEX_URL:-https://api.nostr.wine/trending}
+      TRENDING_ENABLED: 'true'
+      NOSU_PRIVACY_MODE: ${NOSU_PRIVACY_MODE:-false}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  groups:
+    image: nosu-groups:local
+    environment:
+      NOSU_PRIVACY_MODE: ${NOSU_PRIVACY_MODE:-false}
+    build:
+      context: ..
+      dockerfile: infra/groups.Dockerfile
+      args:
+        VITE_BASE_PATH: /groups-app/
+        VITE_PUBLIC_WEB_ORIGIN: ${NOSU_PUBLIC_URL:?set NOSU_PUBLIC_URL in infra/.env}/groups
+        VITE_NOSU_PARENT_ORIGIN: ${NOSU_PUBLIC_URL:?set NOSU_PUBLIC_URL in infra/.env}
+        VITE_CONCORD_AV_SERVERS: ${VITE_CONCORD_AV_SERVERS:-}
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, 'http://127.0.0.1/healthz']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  ingress:
+    image: caddy:2-alpine
+    environment:
+      NOSU_SITE_ADDRESS: ${NOSU_SITE_ADDRESS:-:80}
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      nosu:
+        condition: service_healthy
+      groups:
+        condition: service_healthy
+    restart: unless-stopped
+
+  controller:
+    image: nosu-controller:local
+    build:
+      context: ..
+      dockerfile: infra/controller/Dockerfile
+    ports:
+      - '127.0.0.1:3401:3401'
+    depends_on:
+      ingress:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  pfp-cache:
+  caddy-data:
+  caddy-config:

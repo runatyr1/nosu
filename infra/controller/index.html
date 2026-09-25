@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Nosu Controller</title>
+<style>
+  :root{font:16px system-ui,sans-serif;color-scheme:dark;background:#0d1420;color:#eaf1fa}
+  body{margin:0 auto;max-width:950px;padding:32px 22px}h1{margin-bottom:4px}
+  .muted{color:#a9b9cb}.top{display:flex;justify-content:space-between;gap:20px;align-items:center}
+  button{font:inherit;background:#28445f;color:inherit;border:1px solid #53708f;border-radius:8px;padding:8px 12px;cursor:pointer}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(245px,1fr));gap:14px;margin-top:24px}
+  article{background:#162337;border:1px solid #33475f;border-radius:12px;padding:18px}
+  article h2{margin:0 0 8px;font-size:1.1rem}.state{font-weight:700}.good{color:#7cdda9}.bad{color:#f5a5a5}
+  code{background:#162337;border-radius:5px;padding:2px 5px}
+</style>
+<header class="top"><div><h1>Nosu Controller</h1><span class="muted">Local deployment overview</span></div><button id="refresh">Refresh</button></header>
+<p class="muted">This page checks component health from inside the deployment. It is available only on this machine or through an SSH tunnel.</p>
+<p id="updated" role="status">Checking services…</p>
+<main id="services" class="grid"></main>
+<p class="muted">Manage the stack from the Nosu checkout: <code>sh infra/install.sh status</code>, <code>logs</code>, <code>stop</code>, or <code>restart</code>.</p>
+<script>
+  const labels = {nosu:'Nosu',groups:'Groups',postgres:'PostgreSQL',ingress:'Web ingress',trending:'Trending worker'};
+  async function refresh(){
+    const container=document.querySelector('#services');
+    const updated=document.querySelector('#updated');
+    try{
+      const response=await fetch('/api/status',{cache:'no-store'});
+      if(!response.ok)throw new Error('Status check failed');
+      const data=await response.json();
+      container.replaceChildren();
+      for(const [name,state] of Object.entries(data.services)){
+        const card=document.createElement('article');
+        const title=document.createElement('h2');title.textContent=labels[name]||name;
+        const badge=document.createElement('div');badge.className='state '+(state.ok?'good':'bad');badge.textContent=state.ok?'Available':'Needs attention';
+        const detail=document.createElement('p');detail.className='muted';detail.textContent=state.detail;
+        card.append(title,badge,detail);container.append(card);
+      }
+      updated.textContent='Checked '+new Date(data.checkedAt).toLocaleTimeString();
+    }catch(error){updated.textContent=error.message;container.replaceChildren();}
+  }
+  document.querySelector('#refresh').addEventListener('click',refresh);
+  refresh();setInterval(refresh,15000);
+</script>
+</html>

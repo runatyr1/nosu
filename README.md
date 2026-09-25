@@ -33,6 +33,10 @@ pnpm dev:groups
 
 Open `http://localhost:3400`.
 
+## Deploy
+
+For a VM install and a Kubernetes example, see [infra/README.md](infra/README.md). The VM path builds the Nosu and Groups images locally and starts PostgreSQL and Trending. The Kubernetes manifest uses the same images and configuration contract.
+
 ## Planned deployment modes
 
 Nosu's deployment tooling will default to **availability mode**: self-hosted services are preferred, while configured public Nostr relays and original Armada-compatible services remain available as fallbacks. This gives new operators broad Nostr distribution and useful service continuity without requiring them to understand every infrastructure component first.

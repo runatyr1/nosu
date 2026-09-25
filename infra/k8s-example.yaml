@@ -1,0 +1,234 @@
+# Replace the example host, image references, and Secret values before applying.
+# Build the two images with the same public URL and Groups path as this manifest.
+# This is one portable bundle; choose an existing IngressClass and TLS Secret.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nosu-config
+data:
+  NEXT_PUBLIC_APP_URL: https://nosu.example.com
+  NEXT_PUBLIC_GROUPS_APP_URL: /groups-app/
+  NOSU_PRIVACY_MODE: 'false'
+  PFP_CACHE_DIR: /data/pfp
+  TRENDING_ENABLED: 'true'
+  TRENDING_INDEX_URL: https://api.nostr.wine/trending
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: nosu-secrets
+type: Opaque
+stringData:
+  POSTGRES_PASSWORD: REPLACE_WITH_RANDOM_PASSWORD
+  DATABASE_URL: postgresql://nostrich:REPLACE_WITH_RANDOM_PASSWORD@nosu-postgres:5432/nostrich
+  UNFURL_PROXY_SECRET: REPLACE_WITH_RANDOM_64_HEX_CHARACTERS
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nosu-postgres-data
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nosu-pfp-cache
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nosu-postgres
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: { app: nosu, component: postgres }
+  template:
+    metadata:
+      labels: { app: nosu, component: postgres }
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          env:
+            - { name: POSTGRES_USER, value: nostrich }
+            - { name: POSTGRES_DB, value: nostrich }
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+            - name: POSTGRES_PASSWORD
+              valueFrom: { secretKeyRef: { name: nosu-secrets, key: POSTGRES_PASSWORD } }
+          ports:
+            - { name: postgres, containerPort: 5432 }
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql/data }
+          readinessProbe:
+            exec:
+              command: [sh, -c, 'pg_isready -U nostrich -d nostrich']
+            periodSeconds: 5
+          startupProbe:
+            exec:
+              command: [sh, -c, 'pg_isready -U nostrich -d nostrich']
+            periodSeconds: 5
+            failureThreshold: 60
+          livenessProbe:
+            exec:
+              command: [sh, -c, 'pg_isready -U nostrich -d nostrich']
+            initialDelaySeconds: 30
+            periodSeconds: 15
+      volumes:
+        - name: data
+          persistentVolumeClaim: { claimName: nosu-postgres-data }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nosu-postgres
+spec:
+  selector: { app: nosu, component: postgres }
+  ports:
+    - { name: postgres, port: 5432, targetPort: postgres }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nosu
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: { app: nosu, component: web }
+  template:
+    metadata:
+      labels: { app: nosu, component: web }
+    spec:
+      initContainers:
+        - name: migrate
+          image: registry.example.com/nosu-app:REPLACE_TAG
+          imagePullPolicy: IfNotPresent
+          command: [pnpm, --filter, '@nostrich/api', 'db:deploy']
+          env:
+            - name: DATABASE_URL
+              valueFrom: { secretKeyRef: { name: nosu-secrets, key: DATABASE_URL } }
+      containers:
+        - name: web
+          image: registry.example.com/nosu-app:REPLACE_TAG
+          imagePullPolicy: IfNotPresent
+          command: [pnpm, --filter, web, start]
+          envFrom:
+            - configMapRef: { name: nosu-config }
+          env:
+            - name: DATABASE_URL
+              valueFrom: { secretKeyRef: { name: nosu-secrets, key: DATABASE_URL } }
+            - name: UNFURL_PROXY_SECRET
+              valueFrom: { secretKeyRef: { name: nosu-secrets, key: UNFURL_PROXY_SECRET } }
+          ports:
+            - { name: http, containerPort: 3400 }
+          volumeMounts:
+            - { name: pfp-cache, mountPath: /data/pfp }
+          readinessProbe:
+            httpGet: { path: /api/health/ready, port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /api/health/live, port: http }
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            requests: { cpu: 100m, memory: 512Mi }
+        - name: trending
+          image: registry.example.com/nosu-app:REPLACE_TAG
+          imagePullPolicy: IfNotPresent
+          command: [pnpm, --filter, '@nostrich/api', trending]
+          envFrom:
+            - configMapRef: { name: nosu-config }
+          env:
+            - name: DATABASE_URL
+              valueFrom: { secretKeyRef: { name: nosu-secrets, key: DATABASE_URL } }
+          resources:
+            requests: { cpu: 100m, memory: 512Mi }
+      volumes:
+        - name: pfp-cache
+          persistentVolumeClaim: { claimName: nosu-pfp-cache }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nosu
+spec:
+  selector: { app: nosu, component: web }
+  ports:
+    - { name: http, port: 3400, targetPort: http }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nosu-groups
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: nosu, component: groups }
+  template:
+    metadata:
+      labels: { app: nosu, component: groups }
+    spec:
+      containers:
+        - name: groups
+          image: registry.example.com/nosu-groups:REPLACE_TAG
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef: { name: nosu-config }
+          ports:
+            - { name: http, containerPort: 80 }
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 20
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nosu-groups
+spec:
+  selector: { app: nosu, component: groups }
+  ports:
+    - { name: http, port: 80, targetPort: http }
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nosu
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [nosu.example.com]
+      secretName: nosu-tls
+  rules:
+    - host: nosu.example.com
+      http:
+        paths:
+          - path: /groups-app/
+            pathType: Prefix
+            backend:
+              service:
+                name: nosu-groups
+                port: { name: http }
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: nosu
+                port: { name: http }

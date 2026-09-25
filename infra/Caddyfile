@@ -1,0 +1,11 @@
+{$NOSU_SITE_ADDRESS} {
+    encode zstd gzip
+
+    handle /groups-app/* {
+        reverse_proxy groups:80
+    }
+
+    handle {
+        reverse_proxy nosu:3400
+    }
+}

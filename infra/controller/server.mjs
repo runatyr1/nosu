@@ -1,9 +1,27 @@
 import http from 'node:http';
 import net from 'node:net';
+import dgram from 'node:dgram';
 import fs from 'node:fs';
 
 const PORT = Number(process.env.PORT || 3401);
 const html = fs.readFileSync(new URL('./index.html', import.meta.url));
+const LOG_SERVICES = new Set(['nosu', 'groups', 'postgres', 'ingress', 'trending']);
+const logs = new Map([...LOG_SERVICES].map(name => [name, []]));
+let nextLogId = 0;
+
+// Docker forwards these services' stdout/stderr using its syslog driver. The
+// collector never sees the Docker socket and retains only recent entries.
+const syslog = dgram.createSocket('udp4');
+syslog.on('message', (packet) => {
+  const line = packet.toString('utf8');
+  const match = /^<\d+>1 \S+ \S+ (\S+) \S+ \S+ - (.*)$/s.exec(line);
+  if (!match || !LOG_SERVICES.has(match[1])) return;
+  const entries = logs.get(match[1]);
+  entries.push({ id: ++nextLogId, at: new Date().toISOString(), text: match[2].slice(0, 16000) });
+  if (entries.length > 2000) entries.splice(0, entries.length - 2000);
+});
+syslog.on('error', error => console.error('Log collector error:', error));
+syslog.bind(5514, '0.0.0.0');
 
 async function checkHttp(url) {
   const start = Date.now();
@@ -70,6 +88,16 @@ const server = http.createServer(async (req, res) => {
       checkTrending(),
     ]);
     return json(res, 200, { checkedAt: new Date().toISOString(), services: { nosu, groups, postgres, ingress, trending } });
+  }
+  const logUrl = new URL(req.url || '/', 'http://localhost');
+  const logMatch = /^\/api\/logs\/(nosu|groups|postgres|ingress|trending)$/.exec(logUrl.pathname);
+  if (req.method === 'GET' && logMatch) {
+    const after = Number(logUrl.searchParams.get('after') || 0);
+    const entries = logs.get(logMatch[1]);
+    const latest = Number.isSafeInteger(after) && after > 0
+      ? entries.filter(entry => entry.id > after)
+      : entries.slice(-500);
+    return json(res, 200, { service: logMatch[1], entries: latest.slice(-500) });
   }
   return json(res, 404, { error: 'Not found' });
 });

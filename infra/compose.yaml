@@ -7,9 +7,18 @@ x-app-build: &app-build
     NEXT_PUBLIC_APP_URL: ${NOSU_PUBLIC_URL:?set NOSU_PUBLIC_URL in infra/.env}
     NEXT_PUBLIC_GROUPS_APP_URL: /groups-app/
 
+x-log-options: &log-options
+  syslog-address: udp://127.0.0.1:5514
+  syslog-format: rfc5424
+
 services:
   postgres:
     image: postgres:16-alpine
+    logging:
+      driver: syslog
+      options:
+        <<: *log-options
+        tag: postgres
     environment:
       POSTGRES_USER: nostrich
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in infra/.env}
@@ -36,6 +45,11 @@ services:
 
   nosu:
     image: nosu-app:local
+    logging:
+      driver: syslog
+      options:
+        <<: *log-options
+        tag: nosu
     build: *app-build
     environment:
       DATABASE_URL: ${NOSU_DATABASE_URL:?set NOSU_DATABASE_URL in infra/.env}
@@ -59,6 +73,11 @@ services:
 
   trending:
     image: nosu-app:local
+    logging:
+      driver: syslog
+      options:
+        <<: *log-options
+        tag: trending
     command: [pnpm, --filter, '@nostrich/api', trending]
     environment:
       DATABASE_URL: ${NOSU_DATABASE_URL:?set NOSU_DATABASE_URL in infra/.env}
@@ -72,6 +91,11 @@ services:
 
   groups:
     image: nosu-groups:local
+    logging:
+      driver: syslog
+      options:
+        <<: *log-options
+        tag: groups
     environment:
       NOSU_PRIVACY_MODE: ${NOSU_PRIVACY_MODE:-false}
     build:
@@ -91,6 +115,11 @@ services:
 
   ingress:
     image: caddy:2-alpine
+    logging:
+      driver: syslog
+      options:
+        <<: *log-options
+        tag: ingress
     environment:
       NOSU_SITE_ADDRESS: ${NOSU_SITE_ADDRESS:-:80}
     ports:
@@ -115,6 +144,7 @@ services:
       dockerfile: infra/controller/Dockerfile
     ports:
       - '127.0.0.1:3401:3401'
+      - '127.0.0.1:5514:5514/udp'
     depends_on:
       ingress:
         condition: service_started

@@ -12,15 +12,35 @@
   article{background:#162337;border:1px solid #33475f;border-radius:12px;padding:18px}
   article h2{margin:0 0 8px;font-size:1.1rem}.state{font-weight:700}.good{color:#7cdda9}.bad{color:#f5a5a5}
   code{background:#162337;border-radius:5px;padding:2px 5px}
+  .actions,.log-controls,.tabs{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .tabs{margin:24px 0 16px}.tabs button[aria-selected="true"]{background:#4b759a;border-color:#9cc5e8}
+  input[type="search"],select{font:inherit;color:inherit;background:#162337;border:1px solid #53708f;border-radius:8px;padding:9px}
+  input[type="search"]{min-width:220px}
+  pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#07101d;border:1px solid #33475f;border-radius:10px;padding:16px;min-height:260px;max-height:60vh;overflow:auto;font:13px/1.45 ui-monospace,monospace}
+  .toggle{display:flex;align-items:center;gap:6px}
 </style>
-<header class="top"><div><h1>Nosu Controller</h1><span class="muted">Local deployment overview</span></div><button id="refresh">Refresh</button></header>
-<p class="muted">This page checks component health from inside the deployment. It is available only on this machine or through an SSH tunnel.</p>
-<p id="updated" role="status">Checking services…</p>
-<main id="services" class="grid"></main>
-<p class="muted">Manage the stack from the Nosu checkout: <code>sh infra/install.sh status</code>, <code>logs</code>, <code>stop</code>, or <code>restart</code>.</p>
+<header class="top"><div><h1>Nosu Controller</h1><span class="muted">Local deployment overview</span></div><div class="actions"><button id="overview-button" hidden>Overview</button><button id="logs-button">Logs</button><button id="refresh">Refresh</button></div></header>
+<section id="overview">
+  <p class="muted">This page checks component health from inside the deployment. It is available only on this machine or through an SSH tunnel.</p>
+  <p id="updated" role="status">Checking services…</p>
+  <main id="services" class="grid"></main>
+  <p class="muted">Manage the stack from the Nosu checkout: <code>sh infra/install.sh status</code>, <code>logs</code>, <code>stop</code>, or <code>restart</code>.</p>
+</section>
+<section id="log-view" hidden>
+  <p class="muted">Recent output from each component. Logs collected before this controller started remain available through the installer’s <code>logs</code> command.</p>
+  <nav id="log-tabs" class="tabs" aria-label="Log components"></nav>
+  <div class="log-controls"><input id="log-search" type="search" placeholder="Filter log lines" aria-label="Search logs"><label class="toggle">Order <select id="log-order" aria-label="Log order"><option value="old">Old first</option><option value="new" selected>New first</option></select></label><label class="toggle"><input id="log-live" type="checkbox"> Live mode</label><button id="log-copy" title="Copy visible logs" aria-label="Copy visible logs">⧉</button><span id="log-state" class="muted" role="status"></span></div>
+  <pre id="log-lines" aria-live="off">Select a component.</pre>
+</section>
 <script>
-  const labels = {nosu:'Nosu',groups:'Groups',postgres:'PostgreSQL',ingress:'Web ingress',trending:'Trending worker'};
-  async function refresh(){
+  const labels = {nosu:'Nosu',groups:'Groups',postgres:'PostgreSQL',ingress:'Web gateway (Caddy)',trending:'Trending data'};
+  const overview=document.querySelector('#overview');
+  const logView=document.querySelector('#log-view');
+  const logLines=document.querySelector('#log-lines');
+  let selectedService='nosu';
+  let entries=[];
+  let busyService=null;
+  async function refreshStatus(){
     const container=document.querySelector('#services');
     const updated=document.querySelector('#updated');
     try{
@@ -38,7 +58,63 @@
       updated.textContent='Checked '+new Date(data.checkedAt).toLocaleTimeString();
     }catch(error){updated.textContent=error.message;container.replaceChildren();}
   }
-  document.querySelector('#refresh').addEventListener('click',refresh);
-  refresh();setInterval(refresh,15000);
+  function renderLogs(){
+    const query=document.querySelector('#log-search').value.toLowerCase();
+    const shown=entries.filter(entry => `${entry.at} ${entry.text}`.toLowerCase().includes(query));
+    if(document.querySelector('#log-order').value==='new')shown.reverse();
+    logLines.textContent=shown.length
+      ? shown.map(entry => `${new Date(entry.at).toLocaleTimeString()}  ${entry.text}`).join('\n')
+      : entries.length ? 'No lines match the filter.' : 'No recent logs from this component yet.';
+    document.querySelector('#log-state').textContent='';
+  }
+  async function refreshLogs(reset=false){
+    const service=selectedService;
+    if(busyService===service)return;
+    busyService=service;
+    try{
+      const after=reset||entries.length===0?'':`?after=${entries[entries.length-1].id}`;
+      const response=await fetch(`/api/logs/${service}${after}`,{cache:'no-store'});
+      if(!response.ok)throw new Error(`HTTP ${response.status}`);
+      const data=await response.json();
+      if(service!==selectedService)return;
+      entries=reset||!after?data.entries:[...entries,...data.entries].slice(-500);
+      renderLogs();
+    }catch(error){document.querySelector('#log-state').textContent=`Could not load logs: ${error.message}`;}
+    finally{if(busyService===service)busyService=null;}
+  }
+  function selectService(name){
+    selectedService=name;entries=[];
+    for(const button of document.querySelectorAll('#log-tabs button'))button.setAttribute('aria-selected',String(button.dataset.service===name));
+    logLines.textContent='Loading…';
+    refreshLogs(true);
+  }
+  for(const [name,label] of Object.entries(labels)){
+    const button=document.createElement('button');
+    button.textContent=label;button.dataset.service=name;button.setAttribute('aria-selected',String(name===selectedService));
+    button.addEventListener('click',()=>selectService(name));
+    document.querySelector('#log-tabs').append(button);
+  }
+  document.querySelector('#logs-button').addEventListener('click',()=>{
+    overview.hidden=true;logView.hidden=false;
+    document.querySelector('#logs-button').hidden=true;
+    document.querySelector('#overview-button').hidden=false;
+    selectService(selectedService);
+  });
+  document.querySelector('#overview-button').addEventListener('click',()=>{
+    logView.hidden=true;overview.hidden=false;
+    document.querySelector('#overview-button').hidden=true;
+    document.querySelector('#logs-button').hidden=false;
+    refreshStatus();
+  });
+  document.querySelector('#refresh').addEventListener('click',()=>logView.hidden?refreshStatus():refreshLogs(true));
+  document.querySelector('#log-search').addEventListener('input',renderLogs);
+  document.querySelector('#log-order').addEventListener('change',renderLogs);
+  document.querySelector('#log-copy').addEventListener('click',async()=>{
+    try{await navigator.clipboard.writeText(logLines.textContent);document.querySelector('#log-state').textContent='Copied visible logs';}
+    catch{document.querySelector('#log-state').textContent='Copy failed';}
+  });
+  refreshStatus();
+  setInterval(()=>{if(!overview.hidden)refreshStatus();},15000);
+  setInterval(()=>{if(!logView.hidden&&document.querySelector('#log-live').checked)refreshLogs();},2500);
 </script>
 </html>

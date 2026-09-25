@@ -11,6 +11,8 @@ The untouched research clones remain in `../nostr-stuff/nostrich-client` and `..
 
 The workspace root is based directly on the social client's Git history, with its source remote named `upstream`. `apps/armada` is a submodule based directly on Armada's Git history and also names its source remote `upstream`. Local product changes are committed independently in each repository; the outer repository records the selected Armada commit as its submodule pointer. Before publishing a local Armada commit, configure a writable fork remote and update `.gitmodules` to a cloneable URL that contains that commit.
 
+GitHub tracking for Armada uses `nosu-project/armada-upstream`. Its `canonical` branch is an exact mirror of the Nostr-hosted source, while `main` adds only the scheduled synchronization workflow and merge commits needed to retain that workflow. `runatyr1/nosu-armada` is a GitHub fork of this mirror. Its `main` intentionally remains based on Armada `v0.61.0` plus Nosu's integration commits; newer upstream commits are reviewed and merged deliberately rather than entering the embedded client automatically.
+
 Dependency boundaries are source-preserving as well: the social workspace uses pnpm with the pinned Nostrich `pnpm-lock.yaml`, while `apps/armada` is excluded from that workspace and uses Armada's retained npm `package-lock.json`. This prevents React, Nostrify and cryptography dependency resolution in one client from silently changing the other client.
 
 ## Integration patches
@@ -37,4 +39,4 @@ ArmadaDB, Concord, NIP-29/Buzz, relay routing, crypto, storage identifiers and m
 
 ## Updating
 
-Review upstream changes against the recorded revisions, then apply focused patches to the imported trees. Do not overwrite integration files blindly. Protocol, crypto and database changes require the original upstream tests plus Nosu cross-client interoperability tests. Keep both license notices and publish corresponding source for the combined AGPL derivative.
+Review upstream changes against the recorded revisions and the GitHub fork comparison, then apply focused patches to the imported trees. Do not overwrite integration files blindly. Protocol, crypto and database changes require the original upstream tests plus Nosu cross-client interoperability tests. Keep both license notices and publish corresponding source for the combined AGPL derivative.

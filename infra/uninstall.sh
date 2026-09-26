@@ -31,6 +31,11 @@ if ! command -v docker >/dev/null 2>&1; then
   exit 1
 fi
 
+if ! docker info >/dev/null 2>&1 && [ "$(uname -s)" = Darwin ] && \
+   command -v colima >/dev/null 2>&1 && colima status >/dev/null 2>&1; then
+  export DOCKER_CONTEXT=colima
+fi
+
 if docker info >/dev/null 2>&1; then
   docker_cmd() { docker "$@"; }
 elif command -v sudo >/dev/null 2>&1 && sudo docker info >/dev/null 2>&1; then
@@ -40,20 +45,24 @@ else
   exit 1
 fi
 
-if ! docker_cmd compose version >/dev/null 2>&1; then
+if docker_cmd compose version >/dev/null 2>&1; then
+  compose_cmd() { docker_cmd compose "$@"; }
+elif command -v docker-compose >/dev/null 2>&1; then
+  compose_cmd() { docker-compose "$@"; }
+else
   printf 'nosu: Docker Compose is unavailable\n' >&2
   exit 1
 fi
 
 if [ -f "$CONFIG" ]; then
-  compose() { docker_cmd compose --env-file "$CONFIG" -f "$COMPOSE" "$@"; }
+  compose() { compose_cmd --env-file "$CONFIG" -f "$COMPOSE" "$@"; }
 else
   # Compose interpolation requires these values even for "down". No secret is
   # used to contact the containers during removal.
   compose() {
     NOSU_PUBLIC_URL=http://localhost NOSU_DATABASE_URL=postgresql://unused:unused@postgres:5432/unused \
       POSTGRES_PASSWORD=unused UNFURL_PROXY_SECRET=unused \
-      docker_cmd compose -f "$COMPOSE" "$@"
+      compose_cmd -f "$COMPOSE" "$@"
   }
 fi
 

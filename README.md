@@ -17,7 +17,7 @@ cd nosu
 sh infra/install.sh --url http://localhost
 ```
 
-For a public VM, use `--url https://your.domain` on the first install and point DNS at the VM. The installer builds the images locally and starts Nosu, Groups, Trending, PostgreSQL, and the web gateway. After changing source code, rebuild and replace the containers with:
+On macOS, the installer detects the host and installs Homebrew, Docker CLI, Compose, and Colima if needed; it starts Colima when no Docker daemon is available. This macOS path is for local testing. For a public Linux VM, use `--url https://your.domain` on the first install and point DNS at the VM. The installer builds the images locally and starts Nosu, Groups, Trending, PostgreSQL, and the web gateway. After changing source code, rebuild and replace the containers with:
 
 ```bash
 sh infra/install.sh update

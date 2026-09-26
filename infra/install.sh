@@ -7,6 +7,7 @@ COMPOSE="$ROOT/infra/compose.yaml"
 ACTION=install
 PUBLIC_URL=
 COMPOSE_VERSION=v2.39.4
+HOST_OS=$(uname -s)
 
 say() { printf '%s\n' "$*"; }
 die() { say "nosu: $*" >&2; exit 1; }
@@ -19,6 +20,7 @@ The first install requires --url. Use http://localhost for local testing.
 For a public deployment, use https://your.domain and point DNS at this host.
 Update rebuilds local images and recreates containers using the saved configuration.
 Reinstalls reuse the URL saved in infra/.env when --url is omitted.
+macOS local installs use Homebrew and Colima when Docker is unavailable.
 EOF
 }
 
@@ -74,10 +76,16 @@ if [ "$ACTION" = install ]; then
     saved_url=$(config_value NOSU_PUBLIC_URL)
     [ -n "$PUBLIC_URL" ] || PUBLIC_URL=$saved_url
     validate_url "$PUBLIC_URL"
+    if [ "$HOST_OS" = Darwin ] && [ "$PUBLIC_URL" != http://localhost ]; then
+      die 'macOS installation supports http://localhost only; use a Linux VM for a public deployment'
+    fi
     [ "$saved_url" = "$PUBLIC_URL" ] || die "existing configuration uses $saved_url; edit infra/.env deliberately before changing the public URL"
   else
     [ -n "$PUBLIC_URL" ] || die 'first install requires --url http://localhost or --url https://your.domain'
     validate_url "$PUBLIC_URL"
+    if [ "$HOST_OS" = Darwin ] && [ "$PUBLIC_URL" != http://localhost ]; then
+      die 'macOS installation supports http://localhost only; use a Linux VM for a public deployment'
+    fi
   fi
   [ -f "$ROOT/apps/armada/package-lock.json" ] || die 'Armada submodule is missing; clone Nosu with --recurse-submodules'
   if [ ! -f "$CONFIG" ]; then
@@ -104,14 +112,18 @@ if [ "$ACTION" = update ]; then
   [ -f "$ROOT/apps/armada/package-lock.json" ] || die 'Armada submodule is missing; clone Nosu with --recurse-submodules'
 fi
 
-check_platform() {
+check_linux_arch() {
+  case "$(uname -m)" in x86_64|aarch64) ;; *) die 'only x86_64 and aarch64 are supported' ;; esac
+}
+
+check_apt_platform() {
   [ -r /etc/os-release ] || die 'unsupported host: /etc/os-release is missing'
   . /etc/os-release
   case "$ID:$VERSION_ID" in
     debian:12|debian:13|ubuntu:22.04|ubuntu:24.04) ;;
     *) die "automatic prerequisite install supports Debian 12/13 and Ubuntu 22.04/24.04; found $ID $VERSION_ID" ;;
   esac
-  case "$(uname -m)" in x86_64|aarch64) ;; *) die 'only x86_64 and aarch64 are supported' ;; esac
+  check_linux_arch
 }
 
 as_root() {
@@ -121,8 +133,8 @@ as_root() {
   fi
 }
 
-install_docker() {
-  check_platform
+install_docker_apt() {
+  check_apt_platform
   . /etc/os-release
   command -v curl >/dev/null 2>&1 || die 'curl is required to install Docker from its official repository'
   say 'Installing Docker Engine and Compose from the official Docker APT repository...'
@@ -139,9 +151,92 @@ install_docker() {
   as_root systemctl enable --now docker
 }
 
-if ! command -v docker >/dev/null 2>&1; then install_docker; fi
+install_docker_rpm() {
+  check_linux_arch
+  command -v dnf >/dev/null 2>&1 || die 'dnf is required to install Docker on this RPM-based host'
+  say "Installing Docker Engine and Compose from Docker's RPM repository for $ID..."
+  if [ ! -f /etc/yum.repos.d/docker-ce.repo ]; then
+    if [ "$ID" = fedora ]; then
+      as_root dnf config-manager addrepo --from-repofile https://download.docker.com/linux/fedora/docker-ce.repo
+    else
+      as_root dnf -y install dnf-plugins-core
+      as_root dnf config-manager --add-repo "https://download.docker.com/linux/$rpm_repo/docker-ce.repo"
+    fi
+  fi
+  as_root dnf -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  as_root systemctl enable --now docker
+}
 
-if ! docker info >/dev/null 2>&1 && command -v systemctl >/dev/null 2>&1; then
+install_docker() {
+  [ -r /etc/os-release ] || die 'unsupported host: /etc/os-release is missing'
+  . /etc/os-release
+  case "$ID:$VERSION_ID" in
+    debian:12|debian:13|ubuntu:22.04|ubuntu:24.04)
+      install_docker_apt ;;
+    fedora:43|fedora:44)
+      install_docker_rpm ;;
+    rhel:8*|rhel:9*|rhel:10*|rocky:8*|rocky:9*|rocky:10*|almalinux:8*|almalinux:9*|almalinux:10*)
+      rpm_repo=rhel
+      install_docker_rpm ;;
+    centos:9|centos:10)
+      rpm_repo=centos
+      install_docker_rpm ;;
+    *) die "automatic Docker installation is unavailable for $ID $VERSION_ID; install Docker Engine and Compose first" ;;
+  esac
+}
+
+install_homebrew() {
+  if command -v brew >/dev/null 2>&1; then
+    BREW_BIN=$(command -v brew)
+  elif [ -x /opt/homebrew/bin/brew ]; then
+    BREW_BIN=/opt/homebrew/bin/brew
+  elif [ -x /usr/local/bin/brew ]; then
+    BREW_BIN=/usr/local/bin/brew
+  else
+    [ "$(id -u)" -ne 0 ] || die 'install Homebrew from a regular macOS user account'
+    command -v curl >/dev/null 2>&1 || die 'curl is required to install Homebrew'
+    say 'Installing Homebrew from its official installer...'
+    brew_installer=$(mktemp)
+    trap 'rm -f "$brew_installer"' EXIT HUP INT TERM
+    curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh -o "$brew_installer"
+    /bin/bash "$brew_installer"
+    rm -f "$brew_installer"
+    trap - EXIT HUP INT TERM
+    if [ -x /opt/homebrew/bin/brew ]; then
+      BREW_BIN=/opt/homebrew/bin/brew
+    elif [ -x /usr/local/bin/brew ]; then
+      BREW_BIN=/usr/local/bin/brew
+    else
+      die 'Homebrew installed but its executable was not found'
+    fi
+  fi
+  eval "$("$BREW_BIN" shellenv)"
+}
+
+install_macos_docker() {
+  install_homebrew
+  if ! command -v docker >/dev/null 2>&1; then "$BREW_BIN" install docker; fi
+  if ! command -v colima >/dev/null 2>&1; then "$BREW_BIN" install colima; fi
+  if ! colima status >/dev/null 2>&1; then
+    say 'Starting Colima with the Docker runtime...'
+    colima start --runtime docker
+  fi
+  export DOCKER_CONTEXT=colima
+}
+
+case "$HOST_OS" in
+  Darwin)
+    if ! command -v docker >/dev/null 2>&1 || ! docker info >/dev/null 2>&1; then
+      install_macos_docker
+    fi
+    ;;
+  Linux)
+    if ! command -v docker >/dev/null 2>&1; then install_docker; fi
+    ;;
+  *) die "unsupported host operating system: $HOST_OS" ;;
+esac
+
+if [ "$HOST_OS" = Linux ] && ! docker info >/dev/null 2>&1 && command -v systemctl >/dev/null 2>&1; then
   as_root systemctl start docker 2>/dev/null || true
 fi
 
@@ -184,12 +279,25 @@ install_compose_plugin() {
   trap - EXIT HUP INT TERM
 }
 
-if ! docker_cmd compose version >/dev/null 2>&1; then
+if docker_cmd compose version >/dev/null 2>&1; then
+  COMPOSE_COMMAND=plugin
+elif [ "$HOST_OS" = Darwin ]; then
+  install_homebrew
+  if ! command -v docker-compose >/dev/null 2>&1; then "$BREW_BIN" install docker-compose; fi
+  COMPOSE_COMMAND=standalone
+else
   say "Installing verified Docker Compose $COMPOSE_VERSION for this user..."
   install_compose_plugin
+  COMPOSE_COMMAND=plugin
 fi
 
-compose() { docker_cmd compose --env-file "$CONFIG" -f "$COMPOSE" "$@"; }
+compose() {
+  if [ "$COMPOSE_COMMAND" = standalone ]; then
+    docker-compose --env-file "$CONFIG" -f "$COMPOSE" "$@"
+  else
+    docker_cmd compose --env-file "$CONFIG" -f "$COMPOSE" "$@"
+  fi
+}
 
 case "$ACTION" in
   install)

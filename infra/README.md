@@ -2,9 +2,13 @@
 
 This is the first deployable Social + Groups + Trending stack. It uses one Nosu app image for the web server, Trending worker, and one-shot Prisma migration; a separate Groups static image; PostgreSQL; and one public origin. Public Nostr relays and the configured public Trending index remain in use. The self-hosted relay/media/voice/push phase is not included.
 
+## macOS local testing
+
+On macOS, `sh infra/install.sh --url http://localhost` detects the host and installs Homebrew (when absent), Docker CLI, Compose, and Colima as needed. It starts Colima's Docker runtime if no Docker daemon is available. An already working Docker daemon is reused. The macOS path is for local testing; public HTTPS deployment remains on a Linux VM. The macOS flow has not yet been tested on a Mac.
+
 ## VM with Docker Compose
 
-On Debian 12/13 or Ubuntu 22.04/24.04, on x86_64 or arm64:
+On Debian 12/13, Ubuntu 22.04/24.04, Fedora 43/44, RHEL 8–10, CentOS Stream 9/10, Rocky Linux 8–10, or AlmaLinux 8–10, on x86_64 or arm64:
 
 ```sh
 git clone --recurse-submodules https://github.com/runatyr1/nosu.git
@@ -12,7 +16,7 @@ cd nosu
 sh infra/install.sh --url https://nosu.example.com
 ```
 
-The first install requires an explicit URL. For local testing, use `--url http://localhost`; it serves HTTP without a public certificate. A public install requires an HTTPS domain such as `--url https://nosu.example.com`. Point its DNS at the VM and open inbound TCP 80/443 (and UDP 443 for HTTP/3). Caddy is configured to obtain and renew a certificate; this has not yet been validated on a public VM. The script installs Docker Engine from Docker's official APT repository if absent, and installs a checksum-verified Compose plugin if absent. It may prompt for sudo. Existing Docker installations are preserved.
+The first install requires an explicit URL. For local testing, use `--url http://localhost`; it serves HTTP without a public certificate. A public install requires an HTTPS domain such as `--url https://nosu.example.com`. Point its DNS at the VM and open inbound TCP 80/443 (and UDP 443 for HTTP/3). Caddy is configured to obtain and renew a certificate; this has not yet been validated on a public VM. If Docker is absent, the script installs Docker Engine and Compose from Docker's APT or RPM repository, according to the detected distribution. If an existing Docker installation lacks Compose, it installs a checksum-verified Compose plugin. It may prompt for sudo. Existing working Docker installations are preserved. RPM installation has not yet been tested on an RPM host.
 
 The first run creates `infra/.env` with mode 600 and random PostgreSQL and unfurl secrets. After changing source code, run `sh infra/install.sh update` to rebuild the local Nosu, Groups, and controller images and recreate the Compose containers. The update keeps `infra/.env` and named volumes, including PostgreSQL data and Caddy's TLS state; it does not fetch source changes. Rerunning the install command also preserves configuration and volumes. `sh infra/install.sh status`, `logs`, `restart`, and `stop` are available. `sh infra/uninstall.sh` removes the stack but keeps data and configuration for a later reinstall. `sh infra/uninstall.sh --purge-data` also permanently deletes the Compose database, caches, TLS state, and `.env`. Neither command uninstalls Docker. The current PostgreSQL schema contains only regenerable Trending snapshots; this release does not provide backup, restore, or rollback commands.
 

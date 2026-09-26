@@ -1,3 +1,6 @@
 [submodule "apps/armada"]
 	path = apps/armada
 	url = https://github.com/runatyr1/nosu-armada.git
+[submodule "apps/ditto-relay"]
+	path = apps/ditto-relay
+	url = https://github.com/runatyr1/nosu-ditto-relay.git

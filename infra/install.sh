@@ -13,17 +13,18 @@ die() { say "nosu: $*" >&2; exit 1; }
 
 usage() {
   cat <<'EOF'
-Usage: sh infra/install.sh [install|status|logs|stop|restart] [--url http://localhost|https://DOMAIN]
+Usage: sh infra/install.sh [install|update|status|logs|stop|restart] [--url http://localhost|https://DOMAIN]
 
 The first install requires --url. Use http://localhost for local testing.
 For a public deployment, use https://your.domain and point DNS at this host.
+Update rebuilds local images and recreates containers using the saved configuration.
 Reinstalls reuse the URL saved in infra/.env when --url is omitted.
 EOF
 }
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    install|status|logs|stop|restart) ACTION=$1 ;;
+    install|update|status|logs|stop|restart) ACTION=$1 ;;
     --url) [ "$#" -ge 2 ] || die '--url needs a value'; PUBLIC_URL=$2; shift ;;
     --help|-h) usage; exit 0 ;;
     *) die "unknown argument: $1" ;;
@@ -33,6 +34,9 @@ done
 
 if [ "$ACTION" != install ] && [ ! -f "$CONFIG" ]; then
   die "missing $CONFIG; run install first"
+fi
+if [ "$ACTION" != install ] && [ -n "$PUBLIC_URL" ]; then
+  die '--url is only valid for install'
 fi
 
 validate_url() {
@@ -75,7 +79,7 @@ if [ "$ACTION" = install ]; then
     [ -n "$PUBLIC_URL" ] || die 'first install requires --url http://localhost or --url https://your.domain'
     validate_url "$PUBLIC_URL"
   fi
-  [ -f "$ROOT/apps/armada/package-lock.json" ] || die 'Armada submodule is missing; run git submodule update --init --recursive'
+  [ -f "$ROOT/apps/armada/package-lock.json" ] || die 'Armada submodule is missing; clone Nosu with --recurse-submodules'
   if [ ! -f "$CONFIG" ]; then
     command -v openssl >/dev/null 2>&1 || die 'openssl is required to generate deployment secrets'
     old_umask=$(umask)
@@ -94,6 +98,10 @@ EOF
     umask "$old_umask"
     say "Created $CONFIG (mode 600)."
   fi
+fi
+
+if [ "$ACTION" = update ]; then
+  [ -f "$ROOT/apps/armada/package-lock.json" ] || die 'Armada submodule is missing; clone Nosu with --recurse-submodules'
 fi
 
 check_platform() {
@@ -192,6 +200,13 @@ case "$ACTION" in
     say "Nosu is starting at $PUBLIC_URL"
     say 'Local deployment overview: http://localhost:3401'
     say 'Check health with: sh infra/install.sh status'
+    ;;
+  update)
+    compose config --quiet
+    compose build nosu groups controller
+    compose up -d --force-recreate
+    compose ps
+    say 'Nosu containers rebuilt and replaced. Data volumes and infra/.env kept.'
     ;;
   status) compose ps ;;
   logs) compose logs --tail=120 -f nosu groups trending postgres ingress controller ;;

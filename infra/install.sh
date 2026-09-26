@@ -88,18 +88,12 @@ NOSU_SITE_ADDRESS=$SITE_ADDRESS
 POSTGRES_PASSWORD=$db_password
 NOSU_DATABASE_URL=postgresql://nostrich:$db_password@postgres:5432/nostrich
 UNFURL_PROXY_SECRET=$unfurl_secret
-NOSU_PRIVACY_MODE=false
 TRENDING_INDEX_URL=https://api.nostr.wine/trending
 VITE_CONCORD_AV_SERVERS=
 EOF
     umask "$old_umask"
     say "Created $CONFIG (mode 600)."
   fi
-  [ "$(config_value NOSU_PRIVACY_MODE)" = false ] || die 'privacy mode is not implemented end-to-end; refusing to start an incorrectly labeled private deployment'
-fi
-
-if [ "$ACTION" = restart ]; then
-  [ "$(config_value NOSU_PRIVACY_MODE)" = false ] || die 'privacy mode is not implemented end-to-end; refusing to restart an incorrectly labeled private deployment'
 fi
 
 check_platform() {

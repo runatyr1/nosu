@@ -12,7 +12,5 @@ RUN npm run build
 
 FROM nginx:1.27-alpine
 COPY infra/groups-nginx.conf /etc/nginx/conf.d/default.conf
-COPY infra/privacy-guard.sh /docker-entrypoint.d/05-nosu-privacy-guard.sh
-RUN chmod +x /docker-entrypoint.d/05-nosu-privacy-guard.sh
 COPY --from=build /app/dist/ /usr/share/nginx/html/
 EXPOSE 80

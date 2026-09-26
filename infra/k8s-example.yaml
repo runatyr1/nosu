@@ -8,7 +8,6 @@ metadata:
 data:
   NEXT_PUBLIC_APP_URL: https://nosu.example.com
   NEXT_PUBLIC_GROUPS_APP_URL: /groups-app/
-  NOSU_PRIVACY_MODE: 'false'
   PFP_CACHE_DIR: /data/pfp
   TRENDING_ENABLED: 'true'
   TRENDING_INDEX_URL: https://api.nostr.wine/trending

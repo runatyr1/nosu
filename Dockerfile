@@ -35,12 +35,9 @@ RUN pnpm --filter web build
 
 # ---- runner ----
 FROM build AS runner
-COPY infra/privacy-guard.sh /usr/local/bin/nosu-entrypoint
-RUN chmod +x /usr/local/bin/nosu-entrypoint
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3400
 ENV HOSTNAME=0.0.0.0
 EXPOSE 3400
-ENTRYPOINT ["/usr/local/bin/nosu-entrypoint"]
 CMD ["pnpm", "--filter", "web", "start"]

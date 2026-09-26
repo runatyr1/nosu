@@ -57,7 +57,6 @@ services:
       NEXT_PUBLIC_GROUPS_APP_URL: /groups-app/
       PFP_CACHE_DIR: /data/pfp
       UNFURL_PROXY_SECRET: ${UNFURL_PROXY_SECRET:?set UNFURL_PROXY_SECRET in infra/.env}
-      NOSU_PRIVACY_MODE: ${NOSU_PRIVACY_MODE:-false}
     volumes:
       - pfp-cache:/data/pfp
     depends_on:
@@ -83,7 +82,6 @@ services:
       DATABASE_URL: ${NOSU_DATABASE_URL:?set NOSU_DATABASE_URL in infra/.env}
       TRENDING_INDEX_URL: ${TRENDING_INDEX_URL:-https://api.nostr.wine/trending}
       TRENDING_ENABLED: 'true'
-      NOSU_PRIVACY_MODE: ${NOSU_PRIVACY_MODE:-false}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -96,8 +94,6 @@ services:
       options:
         <<: *log-options
         tag: groups
-    environment:
-      NOSU_PRIVACY_MODE: ${NOSU_PRIVACY_MODE:-false}
     build:
       context: ..
       dockerfile: infra/groups.Dockerfile

@@ -5,10 +5,32 @@
 <title>Nosu Controller</title>
 <style>
   :root{font:16px system-ui,sans-serif;color-scheme:dark;background:#0d1420;color:#eaf1fa}
-  body{margin:0 auto;max-width:950px;padding:32px 22px}h1{margin-bottom:4px}
+  body{margin:0 auto;max-width:1250px;padding:32px 22px}h1{margin-bottom:4px}
   .muted{color:#a9b9cb}.top{display:flex;justify-content:space-between;gap:20px;align-items:center}
   button{font:inherit;background:#28445f;color:inherit;border:1px solid #53708f;border-radius:8px;padding:8px 12px;cursor:pointer}
-  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(245px,1fr));gap:14px;margin-top:24px}
+  .flow-scroll{overflow-x:auto;overflow-y:hidden;scrollbar-color:#53708f #0d1420}
+  .flow-map{position:relative;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));grid-template-rows:repeat(3,minmax(118px,auto));gap:42px 48px;min-width:1100px;margin:28px 0 24px;isolation:isolate}
+  .flow-lines{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:0}
+  .flow-lines .track{fill:none;stroke:#35516a;stroke-width:3}
+  .flow-lines .moving{fill:none;stroke:#7bc5e8;stroke-width:3;stroke-linecap:round;stroke-dasharray:1 12;animation:flow 1.1s linear infinite}
+  @keyframes flow{to{stroke-dashoffset:-13}}
+  .node{position:relative;z-index:1;box-sizing:border-box;width:100%;max-width:185px;min-width:0;min-height:118px;justify-self:center;align-self:center;padding:14px}
+  .node h2{font-size:1rem;margin-bottom:6px}.node p{margin:8px 0 0}
+  .node.internet{grid-column:1;grid-row:2}.node.ingress{grid-column:2;grid-row:2}
+  .node.nosu{grid-column:3;grid-row:1}.node.groups{grid-column:3;grid-row:3}
+  .node.trending{grid-column:4;grid-row:1}.node.postgres{grid-column:5;grid-row:1}
+  .node-icon{width:28px;height:28px;color:#96d8f5;margin-bottom:6px}
+  .node .muted{overflow-wrap:anywhere;font-size:.9rem}.node .state{margin-top:6px;font-size:.92rem}
+  .flow-note{font-size:.88rem;margin:-6px 0 24px}
+  .scroll-hint{display:none}
+  @media(max-width:1000px){
+    .flow-map{min-width:820px;gap:36px 28px}
+    .node{max-width:140px;padding:12px}
+    .node h2{font-size:.9rem}.node .muted{font-size:.82rem}
+  }
+  @media(max-width:864px){.scroll-hint{display:inline}}
+  @media(max-width:560px){body{padding:20px 14px}.node{padding:12px}.node .muted{font-size:.86rem}}
+  @media(prefers-reduced-motion:reduce){.flow-lines .moving{animation:none}}
   article{background:#162337;border:1px solid #33475f;border-radius:12px;padding:18px}
   article h2{margin:0 0 8px;font-size:1.1rem}.state{font-weight:700}.good{color:#7cdda9}.bad{color:#f5a5a5}
   code{background:#162337;border-radius:5px;padding:2px 5px}
@@ -23,7 +45,16 @@
 <section id="overview">
   <p class="muted">This page checks component health from inside the deployment. It is available only on this machine or through an SSH tunnel.</p>
   <p id="updated" role="status">Checking services…</p>
-  <main id="services" class="grid"></main>
+  <div class="flow-scroll"><main id="services" class="flow-map" aria-label="Internet to Web Gateway, then directly to Nosu and Groups. Nosu connects to Trending data, which connects to PostgreSQL.">
+    <svg class="flow-lines" aria-hidden="true"></svg>
+    <article class="node internet" data-node="internet"><svg class="node-icon" viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="M12 35h24a8 8 0 0 0 1-15.9A13 13 0 0 0 12 17a9 9 0 0 0 0 18Z" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/></svg><h2>Internet</h2><p class="muted">Public traffic enters here.</p></article>
+    <article class="node ingress" data-node="ingress"><h2>Web Gateway (Caddy)</h2><div class="state">Checking…</div><p class="muted">Checking connection…</p></article>
+    <article class="node nosu" data-node="nosu"><h2>Nosu (nostrich base)</h2><div class="state">Checking…</div><p class="muted">Checking connection…</p></article>
+    <article class="node groups" data-node="groups"><h2>Groups</h2><div class="state">Checking…</div><p class="muted">Checking connection…</p></article>
+    <article class="node trending" data-node="trending"><h2>Trending data</h2><div class="state">Checking…</div><p class="muted">Checking snapshot…</p></article>
+    <article class="node postgres" data-node="postgres"><h2>PostgreSQL</h2><div class="state">Checking…</div><p class="muted">Checking connection…</p></article>
+  </main></div>
+  <p class="muted flow-note">Animated dots show the deployment connections, not measured traffic. <span class="scroll-hint">Scroll sideways to see the full flow.</span></p>
   <p class="muted">Manage the stack from the Nosu checkout: <code>sh infra/install.sh status</code>, <code>logs</code>, <code>stop</code>, or <code>restart</code>.</p>
 </section>
 <section id="log-view" hidden>
@@ -40,23 +71,47 @@
   let selectedService='nosu';
   let entries=[];
   let busyService=null;
+  const connections=[['internet','ingress'],['ingress','nosu'],['ingress','groups'],['nosu','trending'],['trending','postgres']];
+  function drawConnections(){
+    const graph=document.querySelector('#services');
+    if(graph.hidden||!graph.clientWidth)return;
+    const svg=graph.querySelector('svg.flow-lines');
+    const bounds=graph.getBoundingClientRect();
+    svg.setAttribute('viewBox',`0 0 ${bounds.width} ${bounds.height}`);
+    svg.replaceChildren();
+    for(const [from,to] of connections){
+      const source=graph.querySelector(`[data-node="${from}"]`).getBoundingClientRect();
+      const target=graph.querySelector(`[data-node="${to}"]`).getBoundingClientRect();
+      const x1=source.right-bounds.left;
+      const y1=source.top+source.height/2-bounds.top;
+      const x2=target.left-bounds.left;
+      const y2=target.top+target.height/2-bounds.top;
+      const d=`M ${x1} ${y1} C ${(x1+x2)/2} ${y1}, ${(x1+x2)/2} ${y2}, ${x2} ${y2}`;
+      for(const style of ['track','moving']){
+        const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+        path.setAttribute('class',style);path.setAttribute('d',d);svg.append(path);
+      }
+    }
+  }
+  new ResizeObserver(drawConnections).observe(document.querySelector('#services'));
+  window.addEventListener('resize',drawConnections);
   async function refreshStatus(){
-    const container=document.querySelector('#services');
     const updated=document.querySelector('#updated');
     try{
       const response=await fetch('/api/status',{cache:'no-store'});
       if(!response.ok)throw new Error('Status check failed');
       const data=await response.json();
-      container.replaceChildren();
       for(const [name,state] of Object.entries(data.services)){
-        const card=document.createElement('article');
-        const title=document.createElement('h2');title.textContent=labels[name]||name;
-        const badge=document.createElement('div');badge.className='state '+(state.ok?'good':'bad');badge.textContent=state.ok?'Available':'Needs attention';
-        const detail=document.createElement('p');detail.className='muted';detail.textContent=state.detail;
-        card.append(title,badge,detail);container.append(card);
+        const card=document.querySelector(`#services [data-node="${name}"]`);
+        if(!card)continue;
+        const badge=card.querySelector('.state');
+        badge.className='state '+(state.ok?'good':'bad');
+        badge.textContent=state.ok?'Available':'Needs attention';
+        card.querySelector('p').textContent=state.detail;
       }
       updated.textContent='Checked '+new Date(data.checkedAt).toLocaleTimeString();
-    }catch(error){updated.textContent=error.message;container.replaceChildren();}
+      drawConnections();
+    }catch(error){updated.textContent=error.message;}
   }
   function renderLogs(){
     const query=document.querySelector('#log-search').value.toLowerCase();
@@ -104,7 +159,7 @@
     logView.hidden=true;overview.hidden=false;
     document.querySelector('#overview-button').hidden=true;
     document.querySelector('#logs-button').hidden=false;
-    refreshStatus();
+    drawConnections();refreshStatus();
   });
   document.querySelector('#refresh').addEventListener('click',()=>logView.hidden?refreshStatus():refreshLogs(true));
   document.querySelector('#log-search').addEventListener('input',renderLogs);

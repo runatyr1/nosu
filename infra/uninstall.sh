@@ -10,11 +10,12 @@ usage() {
   cat <<'EOF'
 Usage: sh infra/uninstall.sh [--purge-data]
 
-Stop and remove the Nosu Compose stack. By default, PostgreSQL data, caches,
-TLS state, and infra/.env remain for a later reinstall.
+Stop and remove the Nosu Compose stack. By default, PostgreSQL and OpenSearch
+data, caches, TLS state, and infra/.env remain for a later reinstall.
 
 --purge-data also deletes the Compose volumes and infra/.env. This permanently
-removes the local database, caches, and TLS state. It does not uninstall Docker.
+removes the local database, relay events, caches, and TLS state. It does not
+uninstall Docker.
 EOF
 }
 

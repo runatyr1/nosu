@@ -88,6 +88,7 @@ if [ "$ACTION" = install ]; then
     fi
   fi
   [ -f "$ROOT/apps/armada/package-lock.json" ] || die 'Armada submodule is missing; clone Nosu with --recurse-submodules'
+  [ -f "$ROOT/apps/ditto-relay/Dockerfile" ] || die 'Ditto Relay submodule is missing; clone Nosu with --recurse-submodules'
   if [ ! -f "$CONFIG" ]; then
     command -v openssl >/dev/null 2>&1 || die 'openssl is required to generate deployment secrets'
     old_umask=$(umask)
@@ -110,6 +111,7 @@ fi
 
 if [ "$ACTION" = update ]; then
   [ -f "$ROOT/apps/armada/package-lock.json" ] || die 'Armada submodule is missing; clone Nosu with --recurse-submodules'
+  [ -f "$ROOT/apps/ditto-relay/Dockerfile" ] || die 'Ditto Relay submodule is missing; clone Nosu with --recurse-submodules'
 fi
 
 check_linux_arch() {
@@ -299,10 +301,23 @@ compose() {
   fi
 }
 
+if [ "$ACTION" = install ] || [ "$ACTION" = update ]; then
+  if ! grep -q '^DITTO_NSEC=' "$CONFIG"; then
+    say 'Building Ditto Relay and generating its signing key...'
+    docker_cmd build -t nosu-ditto-relay:local "$ROOT/apps/ditto-relay"
+    ditto_nsec=$(docker_cmd run --rm --entrypoint bun nosu-ditto-relay:local -e 'import { nip19, generateSecretKey } from "nostr-tools"; console.log(nip19.nsecEncode(generateSecretKey()))')
+    case "$ditto_nsec" in nsec1*) ;; *) die 'Ditto Relay signing key generation failed' ;; esac
+    chmod 600 "$CONFIG"
+    printf '\nDITTO_NSEC=%s\n' "$ditto_nsec" >> "$CONFIG"
+    say 'Saved Ditto Relay signing key in infra/.env.'
+  fi
+  [ -n "$(config_value DITTO_NSEC)" ] || die 'DITTO_NSEC is empty in infra/.env'
+fi
+
 case "$ACTION" in
   install)
     compose config --quiet
-    compose build nosu groups controller
+    compose build nosu groups controller ditto-relay
     compose up -d
     compose ps
     say "Nosu is starting at $PUBLIC_URL"
@@ -311,13 +326,13 @@ case "$ACTION" in
     ;;
   update)
     compose config --quiet
-    compose build nosu groups controller
+    compose build nosu groups controller ditto-relay
     compose up -d --force-recreate
     compose ps
     say 'Nosu containers rebuilt and replaced. Data volumes and infra/.env kept.'
     ;;
   status) compose ps ;;
-  logs) compose logs --tail=120 -f nosu groups trending postgres ingress controller ;;
+  logs) compose logs --tail=120 -f nosu groups trending postgres ingress controller ditto-relay opensearch ;;
   stop) compose stop ;;
   restart) compose up -d --force-recreate ;;
 esac

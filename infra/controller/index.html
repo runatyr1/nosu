@@ -17,8 +17,9 @@
   .node{position:relative;z-index:1;box-sizing:border-box;width:100%;max-width:185px;min-width:0;min-height:118px;justify-self:center;align-self:center;padding:14px}
   .node h2{font-size:1rem;margin-bottom:6px}.node p{margin:8px 0 0}
   .node.internet{grid-column:1;grid-row:2}.node.ingress{grid-column:2;grid-row:2}
-  .node.nosu{grid-column:3;grid-row:1}.node.groups{grid-column:3;grid-row:3}
+  .node.nosu{grid-column:3;grid-row:2}.node.groups{grid-column:3;grid-row:3}
   .node.trending{grid-column:4;grid-row:1}.node.postgres{grid-column:5;grid-row:1}
+  .node.ditto-relay{grid-column:4;grid-row:2}.node.opensearch{grid-column:5;grid-row:2}
   .node-icon{width:28px;height:28px;color:#96d8f5;margin-bottom:6px}
   .node .muted{overflow-wrap:anywhere;font-size:.9rem}.node .state{margin-top:6px;font-size:.92rem}
   .flow-note{font-size:.88rem;margin:-6px 0 24px}
@@ -45,7 +46,7 @@
 <section id="overview">
   <p class="muted">This page checks component health from inside the deployment. It is available only on this machine or through an SSH tunnel.</p>
   <p id="updated" role="status">Checking services…</p>
-  <div class="flow-scroll"><main id="services" class="flow-map" aria-label="Internet to Web Gateway, then directly to Nosu and Groups. Nosu connects to Trending data, which connects to PostgreSQL.">
+  <div class="flow-scroll"><main id="services" class="flow-map" aria-label="Internet to Web Gateway, then directly to Nosu and Groups. Nosu branches to Trending data and Ditto Relay; Trending connects to PostgreSQL and Ditto Relay connects to OpenSearch.">
     <svg class="flow-lines" aria-hidden="true"></svg>
     <article class="node internet" data-node="internet"><svg class="node-icon" viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="M12 35h24a8 8 0 0 0 1-15.9A13 13 0 0 0 12 17a9 9 0 0 0 0 18Z" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/></svg><h2>Internet</h2><p class="muted">Public traffic enters here.</p></article>
     <article class="node ingress" data-node="ingress"><h2>Web Gateway (Caddy)</h2><div class="state">Checking…</div><p class="muted">Checking connection…</p></article>
@@ -53,6 +54,8 @@
     <article class="node groups" data-node="groups"><h2>Groups</h2><div class="state">Checking…</div><p class="muted">Checking connection…</p></article>
     <article class="node trending" data-node="trending"><h2>Trending data</h2><div class="state">Checking…</div><p class="muted">Checking snapshot…</p></article>
     <article class="node postgres" data-node="postgres"><h2>PostgreSQL</h2><div class="state">Checking…</div><p class="muted">Checking connection…</p></article>
+    <article class="node ditto-relay" data-node="ditto-relay"><h2>Ditto Relay</h2><div class="state">Checking…</div><p class="muted">Checking relay…</p></article>
+    <article class="node opensearch" data-node="opensearch"><h2>Search (OpenSearch)</h2><div class="state">Checking…</div><p class="muted">Checking index…</p></article>
   </main></div>
   <p class="muted flow-note">Animated dots show the deployment connections, not measured traffic. <span class="scroll-hint">Scroll sideways to see the full flow.</span></p>
   <p class="muted">Manage the stack from the Nosu checkout: <code>sh infra/install.sh status</code>, <code>logs</code>, <code>stop</code>, or <code>restart</code>.</p>
@@ -64,14 +67,14 @@
   <pre id="log-lines" aria-live="off">Select a component.</pre>
 </section>
 <script>
-  const labels = {nosu:'Nosu',groups:'Groups',postgres:'PostgreSQL',ingress:'Web gateway (Caddy)',trending:'Trending data'};
+  const labels = {nosu:'Nosu',groups:'Groups',postgres:'PostgreSQL',ingress:'Web gateway (Caddy)',trending:'Trending data','ditto-relay':'Ditto Relay',opensearch:'Search (OpenSearch)'};
   const overview=document.querySelector('#overview');
   const logView=document.querySelector('#log-view');
   const logLines=document.querySelector('#log-lines');
   let selectedService='nosu';
   let entries=[];
   let busyService=null;
-  const connections=[['internet','ingress'],['ingress','nosu'],['ingress','groups'],['nosu','trending'],['trending','postgres']];
+  const connections=[['internet','ingress'],['ingress','nosu'],['ingress','groups'],['nosu','trending'],['trending','postgres'],['nosu','ditto-relay'],['ditto-relay','opensearch']];
   function drawConnections(){
     const graph=document.querySelector('#services');
     if(graph.hidden||!graph.clientWidth)return;

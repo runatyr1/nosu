@@ -87,6 +87,56 @@ services:
         condition: service_completed_successfully
     restart: unless-stopped
 
+  opensearch:
+    image: opensearchproject/opensearch:2.19.0
+    logging:
+      driver: syslog
+      options:
+        <<: *log-options
+        tag: opensearch
+    environment:
+      discovery.type: single-node
+      DISABLE_SECURITY_PLUGIN: 'true'
+      DISABLE_INSTALL_DEMO_CONFIG: 'true'
+      OPENSEARCH_JAVA_OPTS: -Xms512m -Xmx512m
+      node.store.allow_mmap: 'false'
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
+    healthcheck:
+      test: [CMD-SHELL, "curl -fsS http://localhost:9200/_cluster/health | grep -qE '\"status\":\"(green|yellow)\"'"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 30
+    restart: unless-stopped
+
+  ditto-relay:
+    image: nosu-ditto-relay:local
+    build:
+      context: ../apps/ditto-relay
+    logging:
+      driver: syslog
+      options:
+        <<: *log-options
+        tag: ditto-relay
+    environment:
+      PORT: '13131'
+      RELAY_URL: ws://localhost:13131/
+      PUBLIC_URL: http://localhost:13131/
+      NOSTR_SECRET_KEY: ${DITTO_NSEC:-}
+      OPENSEARCH_NODE: http://opensearch:9200
+      PROTOCOL_WORKERS: '1'
+    ports:
+      - '127.0.0.1:13131:13131'
+    depends_on:
+      opensearch:
+        condition: service_healthy
+    restart: unless-stopped
+
   groups:
     image: nosu-groups:local
     logging:
@@ -151,3 +201,4 @@ volumes:
   pfp-cache:
   caddy-data:
   caddy-config:
+  opensearch-data:

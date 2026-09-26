@@ -5,7 +5,7 @@ import fs from 'node:fs';
 
 const PORT = Number(process.env.PORT || 3401);
 const html = fs.readFileSync(new URL('./index.html', import.meta.url));
-const LOG_SERVICES = new Set(['nosu', 'groups', 'postgres', 'ingress', 'trending']);
+const LOG_SERVICES = new Set(['nosu', 'groups', 'postgres', 'ingress', 'trending', 'ditto-relay', 'opensearch']);
 const logs = new Map([...LOG_SERVICES].map(name => [name, []]));
 let nextLogId = 0;
 
@@ -65,6 +65,21 @@ async function checkTrending() {
   }
 }
 
+async function checkSearch() {
+  try {
+    const response = await fetch('http://opensearch:9200/_cluster/health', { signal: AbortSignal.timeout(4000), cache: 'no-store' });
+    if (!response.ok) return { ok: false, detail: `HTTP ${response.status}` };
+    const health = await response.json();
+    if (!['green', 'yellow'].includes(health.status)) return { ok: false, detail: `Cluster ${health.status || 'unknown'}` };
+    const countResponse = await fetch('http://opensearch:9200/nostr-events/_count', { signal: AbortSignal.timeout(4000), cache: 'no-store' });
+    if (!countResponse.ok) return { ok: false, detail: `Index HTTP ${countResponse.status}` };
+    const count = (await countResponse.json()).count;
+    return { ok: true, detail: `${count} indexed events (${health.status})`, count };
+  } catch (error) {
+    return { ok: false, detail: error.cause?.code || error.name || 'Connection failed' };
+  }
+}
+
 function json(res, status, value) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
   res.end(JSON.stringify(value));
@@ -80,17 +95,19 @@ const server = http.createServer(async (req, res) => {
     return res.end(html);
   }
   if (req.method === 'GET' && req.url === '/api/status') {
-    const [nosu, groups, postgres, ingress, trending] = await Promise.all([
+    const [nosu, groups, postgres, ingress, trending, dittoRelay, opensearch] = await Promise.all([
       checkHttp('http://nosu:3400/api/health/ready'),
       checkHttp('http://groups/healthz'),
       checkTcp('postgres', 5432),
       checkHttp('http://ingress/api/health/live'),
       checkTrending(),
+      checkHttp('http://ditto-relay:13131/'),
+      checkSearch(),
     ]);
-    return json(res, 200, { checkedAt: new Date().toISOString(), services: { nosu, groups, postgres, ingress, trending } });
+    return json(res, 200, { checkedAt: new Date().toISOString(), services: { nosu, groups, postgres, ingress, trending, 'ditto-relay': dittoRelay, opensearch } });
   }
   const logUrl = new URL(req.url || '/', 'http://localhost');
-  const logMatch = /^\/api\/logs\/(nosu|groups|postgres|ingress|trending)$/.exec(logUrl.pathname);
+  const logMatch = /^\/api\/logs\/(nosu|groups|postgres|ingress|trending|ditto-relay|opensearch)$/.exec(logUrl.pathname);
   if (req.method === 'GET' && logMatch) {
     const after = Number(logUrl.searchParams.get('after') || 0);
     const entries = logs.get(logMatch[1]);

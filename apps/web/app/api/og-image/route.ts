@@ -1,3 +1,4 @@
+import { BRAND } from '../../../config/brand'
 import { imageTokenValid } from '../../../lib/server/image-token'
 import { safeUrl } from '../../../lib/server/safe-fetch'
 
@@ -86,7 +87,7 @@ export async function GET(request: Request): Promise<Response> {
           accept: 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
           // The publisher's own page, because that is what a hotlink check looks.
           referer: `${current.origin}/`,
-          'user-agent': 'Mozilla/5.0 (compatible; NostrichBot/1.0; +https://nostrich.org)',
+          'user-agent': `Mozilla/5.0 (compatible; NostrichBot/1.0; +${BRAND.publicOrigin})`,
         },
       })
 

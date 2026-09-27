@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 
-import type { EventTemplate } from '@nostrich/nostr'
+import { SERVICE_CONFIG, type EventTemplate } from '@nostrich/nostr'
 
 import {
   GROUPS_BRIDGE_PROTOCOL,
@@ -20,7 +20,7 @@ import { sessionPubkey, useSession } from '../SessionProvider'
 function defaultGroupsUrl(): string {
   if (process.env.NEXT_PUBLIC_GROUPS_APP_URL) return process.env.NEXT_PUBLIC_GROUPS_APP_URL
   if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    return 'http://localhost:8080/'
+    return SERVICE_CONFIG.groupsDevUrl
   }
   return new URL('/groups-app/', window.location.origin).toString()
 }

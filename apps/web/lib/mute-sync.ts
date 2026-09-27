@@ -5,6 +5,7 @@ import {
   isCiphertext,
   DEFAULT_INDEXER_RELAYS,
   DEFAULT_RELAYS,
+  SERVICE_CONFIG,
   EMPTY_MUTES,
   MUTE_LIST_KIND,
   buildMuteList,
@@ -37,7 +38,7 @@ import {
 /** Carrying the mute list between devices, over NIP-51. localStorage stays the source. */
 
 const MUTE_RELAYS: RelayUrl[] = normalizeRelayUrls([
-  'wss://purplepag.es',
+  SERVICE_CONFIG.listSyncRelay,
   ...DEFAULT_INDEXER_RELAYS,
   ...DEFAULT_RELAYS,
 ])

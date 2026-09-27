@@ -29,6 +29,7 @@ export type {
 } from './types'
 
 export * from './client-tag'
+export { SERVICE_CONFIG } from '../service-config'
 export * from './keys'
 export * from './nip49'
 export * from './signers'

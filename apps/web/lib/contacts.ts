@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import {
   DEFAULT_INDEXER_RELAYS,
   DEFAULT_RELAYS,
+  SERVICE_CONFIG,
   KINDS,
   normalizeRelayUrls,
   nowSeconds,
@@ -21,10 +22,10 @@ import { activeScope, readScoped, writeScoped } from './scope'
 export const MAX_FOLLOWS = 2_500
 const QUERY_TIMEOUT_MS = 6_000
 
-/** Where to look for a kind-3. `wss://purplepag.es` is here and NOT in DEFAULT_RELAYS. */
+/** Where to look for a kind-3. The dedicated list relay is not a general feed relay. */
 /** Where a contact list is read. */
 export const CONTACT_RELAYS: RelayUrl[] = normalizeRelayUrls([
-  'wss://purplepag.es',
+  SERVICE_CONFIG.listSyncRelay,
   ...DEFAULT_INDEXER_RELAYS,
   ...DEFAULT_RELAYS,
 ])

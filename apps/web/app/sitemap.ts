@@ -1,8 +1,9 @@
 import type { MetadataRoute } from 'next'
+import { BRAND } from '../config/brand'
 
 /** The public pages, for crawlers. */
 /** Same source as `layout.tsx`'s `metadataBase`. */
-const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://nostrich.org'
+const appUrl = BRAND.publicOrigin
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date()

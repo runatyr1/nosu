@@ -1,4 +1,5 @@
-import { isPrivateHostname } from '@nostrich/nostr'
+import { isPrivateHostname, SERVICE_CONFIG } from '@nostrich/nostr'
+import { BRAND } from '../../../config/brand'
 
 import { proxiedImageUrl } from '../../../lib/server/image-token'
 import { isBareHost, looksLikeChallenge } from '../../../lib/server/unfurl-guards'
@@ -92,11 +93,11 @@ function fromCodePoint(code: number, fallback: string): string {
 const OEMBED: { match: RegExp; endpoint: (url: string) => string }[] = [
   {
     match: /^(?:www\.|m\.|music\.)?(?:youtube\.com|youtu\.be)$/i,
-    endpoint: url => `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`,
+    endpoint: url => `${SERVICE_CONFIG.oembed.youtube}?url=${encodeURIComponent(url)}&format=json`,
   },
   {
     match: /^(?:www\.)?vimeo\.com$/i,
-    endpoint: url => `https://vimeo.com/api/oembed.json?url=${encodeURIComponent(url)}`,
+    endpoint: url => `${SERVICE_CONFIG.oembed.vimeo}?url=${encodeURIComponent(url)}`,
   },
 ]
 
@@ -171,7 +172,7 @@ export async function GET(request: Request): Promise<Response> {
           signal: direct,
           headers: {
             // Some sites serve OG tags only to things that look like a crawler.
-            'user-agent': 'Mozilla/5.0 (compatible; NostrichBot/1.0; +https://nostrich.org)',
+            'user-agent': `Mozilla/5.0 (compatible; NostrichBot/1.0; +${BRAND.publicOrigin})`,
             accept: 'text/html,application/xhtml+xml',
           },
         })

@@ -1,6 +1,6 @@
 'use client'
 
-import { parseContent, type Hex, type RelayUrl } from '@nostrich/nostr'
+import { parseContent, SERVICE_CONFIG, type Hex, type RelayUrl } from '@nostrich/nostr'
 
 /** THE POINTER SOMEBODY PASTED INTO A COMPOSER. */
 
@@ -100,5 +100,5 @@ export function removeFromDraft(text: string, raw: string): string {
 export function publishedForm(quote: DraftQuote): string {
   // `raw === bech32` means it was typed as a pointer rather than pasted as a link.
   if (quote.raw === quote.bech32) return `nostr:${quote.bech32}`
-  return `https://nostrich.org/e/${quote.bech32}`
+  return `${SERVICE_CONFIG.quoteOrigin}/e/${quote.bech32}`
 }

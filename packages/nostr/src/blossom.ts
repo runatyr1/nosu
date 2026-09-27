@@ -1,6 +1,7 @@
 import { sha256 } from '@noble/hashes/sha256'
 import { bytesToHex } from '@noble/hashes/utils'
 import type { BlobDescriptor, Hex, NostrEvent, Signer, UploadResult } from './types'
+import { SERVICE_CONFIG } from '../service-config'
 
 /** Blossom client. */
 
@@ -12,11 +13,7 @@ export const BLOSSOM_AUTH_KIND = 24242
 const COPIES = 2
 
 /** Where a blob goes, and why these three. */
-export const DEFAULT_BLOSSOM_SERVERS: readonly string[] = [
-  'https://blossom.nostr.build',
-  'https://cdn.hzrd149.com',
-  'https://cdn.nostrcheck.me',
-]
+export const DEFAULT_BLOSSOM_SERVERS: readonly string[] = SERVICE_CONFIG.blossomServers
 
 /** The same blob, on the other servers we know. */
 export function blossomAlternatives(

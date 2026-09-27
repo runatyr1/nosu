@@ -1,7 +1,7 @@
-import { encodeNevent, encodeNote, type NostrEvent } from '@nostrich/nostr'
+import { encodeNevent, encodeNote, SERVICE_CONFIG, type NostrEvent } from '@nostrich/nostr'
 
 /** Where a nostr: entity points. */
-const RESOLVER = 'https://njump.me'
+const RESOLVER = SERVICE_CONFIG.nostrResolver
 
 /** npub/nprofile → /p/…, note/nevent → /e/…, anything else → njump. */
 export function isInternalEntity(bech32: string): boolean {

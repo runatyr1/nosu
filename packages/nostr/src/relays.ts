@@ -1,4 +1,5 @@
 import type { EventTemplate, Hex, NostrEvent, RelayList, RelayPolicy, RelayUrl } from './types'
+import { SERVICE_CONFIG } from '../service-config'
 
 /** One line of a NIP-65 relay list. */
 export type RelayEntry = { url: RelayUrl; policy: RelayPolicy }
@@ -10,20 +11,7 @@ export const RELAY_LIST_KIND = 10002
  * Provisional Nosu defaults for an account without a NIP-65 list.
  * Keep this list centrally configurable: operator review is still pending.
  */
-export const DEFAULT_RELAYS: readonly RelayUrl[] = Object.freeze([
-  'wss://relay.primal.net',
-  'wss://relay.nostr.com',
-  'wss://nos.lol',
-  'wss://relay.snort.social',
-  'wss://relay.damus.io',
-  'wss://relay.nostr.band',
-  'wss://relay.nos.social',
-  'wss://nostr.bitcoiner.social',
-  'wss://nostr.mom',
-  'wss://relay2.veganostr.com',
-  'wss://nostr.data.haus',
-  'wss://poster.place/relay',
-])
+export const DEFAULT_RELAYS: readonly RelayUrl[] = Object.freeze([...SERVICE_CONFIG.socialRelays])
 
 /** The default set with its policies. */
 /** Relays that will not accept a write from someone who has not paid them. */
@@ -39,7 +27,7 @@ export const DEFAULT_RELAY_ENTRIES: readonly RelayEntry[] = Object.freeze(
 ) as readonly RelayEntry[]
 
 /** Where a `nostrconnect://` invite tells a remote signer to meet us. */
-const SIGNER_RENDEZVOUS_RELAY = 'wss://relay.powr.build' as RelayUrl
+const SIGNER_RENDEZVOUS_RELAY = SERVICE_CONFIG.signerRendezvousRelay as RelayUrl
 
 export const DEFAULT_SIGNER_RELAYS: readonly RelayUrl[] = Object.freeze([
   ...DEFAULT_RELAY_ENTRIES.filter(entry => entry.policy.write).map(entry => entry.url),
@@ -63,35 +51,20 @@ export function signerRelays(stored: readonly string[]): RelayUrl[] {
 }
 
 /** Where a kind-10050 points when this app has to create one. */
-export const DEFAULT_DM_RELAYS: readonly RelayUrl[] = Object.freeze([
-  'wss://nos.lol',
-  'wss://nostr.mom',
-])
+export const DEFAULT_DM_RELAYS: readonly RelayUrl[] = Object.freeze([...SERVICE_CONFIG.dmRelays])
 
 /** Relays that can answer a NIP-50 `search` filter. */
 /** Extra relays consulted for ZAP RECEIPTS ONLY (kind 9735), never for the feed. */
-export const ZAP_RELAYS: readonly RelayUrl[] = Object.freeze([
-  /* `nostr.land` was here and is not any more, by the same measurement that added. */
-  /* `relay.nostr.band` was here and is REMOVED. */
-  'wss://nostr-pub.wellorder.net',
-  /* Added 2026-09-04, by the same method and for a specific missing receipt. */
-  'wss://nostr.oxtr.dev',
-  'wss://relay.mostr.pub',
-  /* ── AND THIS IS WHERE ADDING RELAYS STOPS WORKING ───────────────────────────────────. */
-] as RelayUrl[])
+export const ZAP_RELAYS: readonly RelayUrl[] = Object.freeze([...SERVICE_CONFIG.zapRelays])
 
 /** Relays that actually implement NIP-50, which is a much shorter list than the ones. */
-export const SEARCH_RELAYS: readonly RelayUrl[] = Object.freeze([
-  'wss://search.nos.today',
-])
+export const SEARCH_RELAYS: readonly RelayUrl[] = Object.freeze([...SERVICE_CONFIG.searchRelays])
 
 /** Filters one REQ may carry. */
 export const MAX_FILTERS_PER_REQ = 10
 
 /** Relays that aggregate kind-0 and kind-10002 for the whole network. */
-export const DEFAULT_INDEXER_RELAYS: readonly RelayUrl[] = Object.freeze([
-  'wss://user.kindpag.es',
-])
+export const DEFAULT_INDEXER_RELAYS: readonly RelayUrl[] = Object.freeze([...SERVICE_CONFIG.indexerRelays])
 
 /** Fresh objects every call. */
 

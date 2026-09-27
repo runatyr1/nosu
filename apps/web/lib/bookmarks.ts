@@ -7,6 +7,7 @@ import {
   BOOKMARK_LIST_KIND,
   DEFAULT_INDEXER_RELAYS,
   DEFAULT_RELAYS,
+  SERVICE_CONFIG,
   bookmarkKey,
   bookmarkKeys,
   buildBookmarkList,
@@ -33,7 +34,7 @@ import { sessionPubkey, useSession } from '../components/SessionProvider'
 
 /** Same relay set as contact lists, for the same reason. */
 const BOOKMARK_RELAYS: RelayUrl[] = normalizeRelayUrls([
-  'wss://purplepag.es',
+  SERVICE_CONFIG.listSyncRelay,
   ...DEFAULT_INDEXER_RELAYS,
   ...DEFAULT_RELAYS,
 ])

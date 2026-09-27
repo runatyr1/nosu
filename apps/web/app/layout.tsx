@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import { Poppins } from 'next/font/google'
+import { SERVICE_CONFIG } from '@nostrich/nostr'
 
 import { Providers } from '../components/Providers'
 import { AppShell } from '../components/AppShell'
@@ -88,11 +89,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     >
       <head>
         {/* Material Symbols, the icon set the ported X layout uses. */}
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link rel="preconnect" href={new URL(SERVICE_CONFIG.fonts.googleCss).origin} />
+        <link rel="preconnect" href={SERVICE_CONFIG.fonts.googleStatic} crossOrigin="anonymous" />
         <link
           rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=swap"
+          href={SERVICE_CONFIG.fonts.googleCss}
         />
       {/* STRUCTURED DATA. It was added to earn a thumbnail beside the search result. */}
         <script

@@ -1,4 +1,5 @@
 /** Links that are really videos, and where their player lives. */
+import { SERVICE_CONFIG } from '../service-config'
 
 export type VideoProvider =
   | 'youtube'
@@ -74,56 +75,56 @@ export function videoEmbed(raw: string): VideoEmbed | undefined {
     /** `youtube-nocookie.com`, and it is not cosmetic. */
     return {
       provider: 'youtube',
-      embedUrl: `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&rel=0`,
+      embedUrl: `${SERVICE_CONFIG.embeds.youtube}/${id}?autoplay=1&rel=0`,
       // i.ytimg.com serves the still without cookies and without the player.
-      poster: `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+      poster: `${SERVICE_CONFIG.embeds.youtubePoster}/${id}/hqdefault.jpg`,
     }
   }
 
   if (host === 'vimeo.com' || host === 'www.vimeo.com' || host === 'player.vimeo.com') {
     const id = /(?:^|\/)(\d{6,12})(?:$|[/?#])/.exec(url.pathname)?.[1]
     if (id === undefined) return undefined
-    return { provider: 'vimeo', embedUrl: `https://player.vimeo.com/video/${id}?autoplay=1` }
+    return { provider: 'vimeo', embedUrl: `${SERVICE_CONFIG.embeds.vimeo}/${id}?autoplay=1` }
   }
 
   // Odysee keeps the same path on its embed host, so `/@channel/video:hash` maps.
   if (host === 'odysee.com' || host === 'www.odysee.com') {
     if (url.pathname.length <= 1) return undefined
-    return { provider: 'odysee', embedUrl: `https://odysee.com/$/embed${url.pathname}?autoplay=1` }
+    return { provider: 'odysee', embedUrl: `${SERVICE_CONFIG.embeds.odysee}${url.pathname}?autoplay=1` }
   }
 
   if (host === 'rumble.com' || host === 'www.rumble.com') {
     // Only the already-embeddable form.
     const match = /^\/embed\/([A-Za-z0-9]+)/.exec(url.pathname)
     if (match === null) return undefined
-    return { provider: 'rumble', embedUrl: `https://rumble.com/embed/${match[1]}/?pub=4` }
+    return { provider: 'rumble', embedUrl: `${SERVICE_CONFIG.embeds.rumble}/${match[1]}/?pub=4` }
   }
 
   /* Twitch, and it is three different players behind one hostname. */
   if (host === 'twitch.tv' || host === 'www.twitch.tv' || host === 'clips.twitch.tv') {
-    const parent = 'parent=nostrich.org'
+    const parent = `parent=${SERVICE_CONFIG.embeds.twitchParent}`
     const segments = url.pathname.split('/').filter(part => part !== '')
 
     // clips.twitch.tv/<slug>.
     if (host === 'clips.twitch.tv') {
       const slug = segments[0]
       if (slug === undefined) return undefined
-      return { provider: 'twitch', embedUrl: `https://clips.twitch.tv/embed?clip=${slug}&${parent}&autoplay=true` }
+      return { provider: 'twitch', embedUrl: `${SERVICE_CONFIG.embeds.twitchClips}?clip=${slug}&${parent}&autoplay=true` }
     }
     // twitch.tv/<channel>/clip/<slug>.
     if (segments.length === 3 && segments[1] === 'clip') {
       return {
         provider: 'twitch',
-        embedUrl: `https://clips.twitch.tv/embed?clip=${segments[2]}&${parent}&autoplay=true`,
+        embedUrl: `${SERVICE_CONFIG.embeds.twitchClips}?clip=${segments[2]}&${parent}&autoplay=true`,
       }
     }
     // twitch.tv/videos/<id>.
     if (segments.length === 2 && segments[0] === 'videos' && /^\d+$/.test(segments[1] ?? '')) {
-      return { provider: 'twitch', embedUrl: `https://player.twitch.tv/?video=${segments[1]}&${parent}&autoplay=true` }
+      return { provider: 'twitch', embedUrl: `${SERVICE_CONFIG.embeds.twitchPlayer}?video=${segments[1]}&${parent}&autoplay=true` }
     }
     // twitch.tv/<channel>.
     if (segments.length === 1 && /^[A-Za-z0-9_]{3,25}$/.test(segments[0] ?? '')) {
-      return { provider: 'twitch', embedUrl: `https://player.twitch.tv/?channel=${segments[0]}&${parent}&autoplay=true` }
+      return { provider: 'twitch', embedUrl: `${SERVICE_CONFIG.embeds.twitchPlayer}?channel=${segments[0]}&${parent}&autoplay=true` }
     }
     return undefined
   }
@@ -135,27 +136,27 @@ export function videoEmbed(raw: string): VideoEmbed | undefined {
         ? url.pathname.split('/').filter(Boolean)[0]
         : /^\/video\/([A-Za-z0-9]+)/.exec(url.pathname)?.[1]
     if (id === undefined) return undefined
-    return { provider: 'dailymotion', embedUrl: `https://geo.dailymotion.com/player.html?video=${id}` }
+    return { provider: 'dailymotion', embedUrl: `${SERVICE_CONFIG.embeds.dailymotion}?video=${id}` }
   }
 
   if (host === 'bitchute.com' || host === 'www.bitchute.com') {
     const id = /^\/video\/([A-Za-z0-9_-]+)/.exec(url.pathname)?.[1]
     if (id === undefined) return undefined
-    return { provider: 'bitchute', embedUrl: `https://www.bitchute.com/embed/${id}/` }
+    return { provider: 'bitchute', embedUrl: `${SERVICE_CONFIG.embeds.bitchute}/${id}/` }
   }
 
   if (host === 'archive.org' || host === 'www.archive.org') {
     // Only `/details/<id>`.
     const id = /^\/details\/([^/]+)/.exec(url.pathname)?.[1]
     if (id === undefined) return undefined
-    return { provider: 'archive', embedUrl: `https://archive.org/embed/${id}` }
+    return { provider: 'archive', embedUrl: `${SERVICE_CONFIG.embeds.archive}/${id}` }
   }
 
   if (host === 'kick.com' || host === 'www.kick.com') {
     // Live channels only.
     const channel = /^\/([A-Za-z0-9_-]{3,25})$/.exec(url.pathname)?.[1]
     if (channel === undefined) return undefined
-    return { provider: 'kick', embedUrl: `https://player.kick.com/${channel}?autoplay=true` }
+    return { provider: 'kick', embedUrl: `${SERVICE_CONFIG.embeds.kick}/${channel}?autoplay=true` }
   }
 
   /* ── AUDIO ───────────────────────────────────────────────────────────────────────. */
@@ -167,7 +168,7 @@ export function videoEmbed(raw: string): VideoEmbed | undefined {
     return {
       provider: 'spotify',
       kind: 'audio',
-      embedUrl: `https://open.spotify.com/embed/${match[1]}/${match[2]}`,
+      embedUrl: `${SERVICE_CONFIG.embeds.spotify}/${match[1]}/${match[2]}`,
     }
   }
 
@@ -175,11 +176,11 @@ export function videoEmbed(raw: string): VideoEmbed | undefined {
     // The widget resolves the public URL itself, so no API key and no id lookup.
     const segments = url.pathname.split('/').filter(part => part !== '')
     if (segments.length < 2 || RESERVED_SOUNDCLOUD.has(segments[0] ?? '')) return undefined
-    const canonical = `https://soundcloud.com/${segments.join('/')}`
+    const canonical = `${SERVICE_CONFIG.embeds.soundcloud}/${segments.join('/')}`
     return {
       provider: 'soundcloud',
       kind: 'audio',
-      embedUrl: `https://w.soundcloud.com/player/?url=${encodeURIComponent(canonical)}&auto_play=true&hide_related=true&show_comments=false`,
+      embedUrl: `${SERVICE_CONFIG.embeds.soundcloudPlayer}?url=${encodeURIComponent(canonical)}&auto_play=true&hide_related=true&show_comments=false`,
     }
   }
 
@@ -190,20 +191,20 @@ export function videoEmbed(raw: string): VideoEmbed | undefined {
     return {
       provider: 'wavlake',
       kind: 'audio',
-      embedUrl: `https://embed.wavlake.com/${match[1]}/${match[2]}`,
+      embedUrl: `${SERVICE_CONFIG.embeds.wavlake}/${match[1]}/${match[2]}`,
     }
   }
 
   /* Apple Podcasts and Apple Music, which share one trick: the embed player lives. */
   if (host === 'podcasts.apple.com' || host === 'music.apple.com') {
     if (!/^\/[a-z]{2}\//iu.test(url.pathname)) return undefined
-    const embedHost = host === 'podcasts.apple.com' ? 'embed.podcasts.apple.com' : 'embed.music.apple.com'
+    const embedOrigin = host === 'podcasts.apple.com' ? SERVICE_CONFIG.embeds.applePodcasts : SERVICE_CONFIG.embeds.appleMusic
     return {
       provider: 'apple',
       kind: 'audio',
       // Apple's own documented height for the compact player.
       height: 175,
-      embedUrl: `https://${embedHost}${url.pathname}${url.search}`,
+      embedUrl: `${embedOrigin}${url.pathname}${url.search}`,
     }
   }
 

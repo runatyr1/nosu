@@ -8,6 +8,9 @@ ACTION=install
 PUBLIC_URL=
 COMPOSE_VERSION=v2.39.4
 HOST_OS=$(uname -s)
+COLIMA_CPUS=2
+COLIMA_MEMORY_GIB=4
+COLIMA_DISK_GIB=20
 
 say() { printf '%s\n' "$*"; }
 die() { say "nosu: $*" >&2; exit 1; }
@@ -71,6 +74,17 @@ config_value() {
   sed -n "s/^$1=//p" "$CONFIG" | head -n 1
 }
 
+ensure_submodules() {
+  if [ ! -f "$ROOT/apps/armada/package-lock.json" ] || \
+     [ ! -f "$ROOT/apps/ditto-relay/Dockerfile" ]; then
+    command -v git >/dev/null 2>&1 || die 'git is required to initialize Nosu submodules'
+    say 'Initializing Nosu submodules...'
+    git -C "$ROOT" submodule update --init --recursive
+  fi
+  [ -f "$ROOT/apps/armada/package-lock.json" ] || die 'Armada submodule initialization failed'
+  [ -f "$ROOT/apps/ditto-relay/Dockerfile" ] || die 'Ditto Relay submodule initialization failed'
+}
+
 if [ "$ACTION" = install ]; then
   if [ -f "$CONFIG" ]; then
     saved_url=$(config_value NOSU_PUBLIC_URL)
@@ -87,8 +101,7 @@ if [ "$ACTION" = install ]; then
       die 'macOS installation supports http://localhost only; use a Linux VM for a public deployment'
     fi
   fi
-  [ -f "$ROOT/apps/armada/package-lock.json" ] || die 'Armada submodule is missing; clone Nosu with --recurse-submodules'
-  [ -f "$ROOT/apps/ditto-relay/Dockerfile" ] || die 'Ditto Relay submodule is missing; clone Nosu with --recurse-submodules'
+  ensure_submodules
   if [ ! -f "$CONFIG" ]; then
     command -v openssl >/dev/null 2>&1 || die 'openssl is required to generate deployment secrets'
     old_umask=$(umask)
@@ -110,8 +123,7 @@ EOF
 fi
 
 if [ "$ACTION" = update ]; then
-  [ -f "$ROOT/apps/armada/package-lock.json" ] || die 'Armada submodule is missing; clone Nosu with --recurse-submodules'
-  [ -f "$ROOT/apps/ditto-relay/Dockerfile" ] || die 'Ditto Relay submodule is missing; clone Nosu with --recurse-submodules'
+  ensure_submodules
 fi
 
 check_linux_arch() {
@@ -215,21 +227,52 @@ install_homebrew() {
   eval "$("$BREW_BIN" shellenv)"
 }
 
+start_colima() {
+  say "Starting Colima with $COLIMA_CPUS CPUs, ${COLIMA_MEMORY_GIB} GiB memory, and a ${COLIMA_DISK_GIB} GiB disk..."
+  colima start --runtime docker --cpus "$COLIMA_CPUS" --memory "$COLIMA_MEMORY_GIB" --disk "$COLIMA_DISK_GIB"
+  export DOCKER_CONTEXT=colima
+}
+
+ensure_colima_resources() {
+  if ! colima status >/dev/null 2>&1; then
+    start_colima
+    return
+  fi
+
+  status_json=$(colima status --json 2>/dev/null || true)
+  current_cpus=$(printf '%s\n' "$status_json" | sed -n 's/.*"cpu":\([0-9][0-9]*\).*/\1/p')
+  current_memory=$(printf '%s\n' "$status_json" | sed -n 's/.*"memory":\([0-9][0-9]*\).*/\1/p')
+  current_disk=$(printf '%s\n' "$status_json" | sed -n 's/.*"disk":\([0-9][0-9]*\).*/\1/p')
+  min_memory=$((COLIMA_MEMORY_GIB * 1024 * 1024 * 1024))
+  min_disk=$((COLIMA_DISK_GIB * 1024 * 1024 * 1024))
+
+  if [ -z "$current_cpus" ] || [ -z "$current_memory" ] || [ -z "$current_disk" ]; then
+    die 'could not read Colima resource configuration'
+  fi
+  if [ "$current_cpus" -lt "$COLIMA_CPUS" ] || \
+     [ "$current_memory" -lt "$min_memory" ] || \
+     [ "$current_disk" -lt "$min_disk" ]; then
+    say 'Existing Colima instance is too small for the Nosu stack; resizing it...'
+    colima stop
+    start_colima
+  else
+    export DOCKER_CONTEXT=colima
+  fi
+}
+
 install_macos_docker() {
   install_homebrew
   if ! command -v docker >/dev/null 2>&1; then "$BREW_BIN" install docker; fi
   if ! command -v colima >/dev/null 2>&1; then "$BREW_BIN" install colima; fi
-  if ! colima status >/dev/null 2>&1; then
-    say 'Starting Colima with the Docker runtime...'
-    colima start --runtime docker
-  fi
-  export DOCKER_CONTEXT=colima
+  ensure_colima_resources
 }
 
 case "$HOST_OS" in
   Darwin)
     if ! command -v docker >/dev/null 2>&1 || ! docker info >/dev/null 2>&1; then
       install_macos_docker
+    elif command -v colima >/dev/null 2>&1 && [ "$(docker context show 2>/dev/null || true)" = colima ]; then
+      ensure_colima_resources
     fi
     ;;
   Linux)

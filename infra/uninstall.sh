@@ -14,8 +14,8 @@ Stop and remove the Nosu Compose stack. By default, PostgreSQL and OpenSearch
 data, caches, TLS state, and infra/.env remain for a later reinstall.
 
 --purge-data also deletes the Compose volumes and infra/.env. This permanently
-removes the local database, relay events, caches, and TLS state. It does not
-uninstall Docker.
+removes the local database, relay events, caches, TLS state, and locally built
+Nosu images. It does not uninstall Docker or stop Colima.
 EOF
 }
 
@@ -69,8 +69,13 @@ fi
 
 if [ "$PURGE" = true ]; then
   compose down --remove-orphans --volumes
+  for image in nosu-app:local nosu-groups:local nosu-controller:local nosu-ditto-relay:local; do
+    if docker_cmd image inspect "$image" >/dev/null 2>&1; then
+      docker_cmd image rm "$image"
+    fi
+  done
   rm -f -- "$CONFIG"
-  printf 'Nosu containers, network, data volumes, and configuration removed.\n'
+  printf 'Nosu containers, network, data volumes, configuration, and locally built images removed.\n'
 else
   compose down --remove-orphans
   printf 'Nosu containers and network removed. Data volumes and infra/.env kept.\n'

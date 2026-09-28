@@ -82,6 +82,7 @@ services:
       DATABASE_URL: ${NOSU_DATABASE_URL:?set NOSU_DATABASE_URL in infra/.env}
       TRENDING_INDEX_URL: ${TRENDING_INDEX_URL:-https://api.nostr.wine/trending}
       TRENDING_ENABLED: 'true'
+      TRENDING_BUILD_TIMEOUT_MS: ${TRENDING_BUILD_TIMEOUT_MS:-600000}
     depends_on:
       migrate:
         condition: service_completed_successfully

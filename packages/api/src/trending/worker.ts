@@ -1,7 +1,7 @@
 /** The trending builder's process. */
 import { installWebSocket } from '../websocket'
 import { prisma } from '../db'
-import { log, messageOf } from '../runtime'
+import { log, logSync, messageOf } from '../runtime'
 import { TrendingBuilder } from './builder'
 
 /** Keeps the event loop alive between builds, so the process does not exit on an idle. */
@@ -31,7 +31,11 @@ async function main(): Promise<void> {
     return
   }
 
-  const builder = new TrendingBuilder()
+  const builder = new TrendingBuilder(details => {
+    logSync('error', 'trending: build stalled; restarting worker', { ...details })
+    // A restart closes stuck sockets/queries before the next build starts.
+    process.exit(1)
+  })
   builder.start()
   log('info', 'trending builder started')
 

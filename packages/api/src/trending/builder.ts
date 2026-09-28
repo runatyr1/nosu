@@ -10,6 +10,7 @@ import { ARTICLE_WINDOW_HOURS, buildArticles } from './articles'
 import { buildWindow, mergeSources, type BuildResult } from './build'
 import { recountReplies, type VerifiedCounts } from './replies'
 import { resolveNotes } from './resolve'
+import { BuildWatchdog, type StalledBuild } from './watchdog'
 import {
   EMPTY_RESULT,
   WINDOWS,
@@ -21,6 +22,7 @@ import {
 
 /** How often the whole set is rebuilt. */
 const BUILD_INTERVAL_MS = envMs('TRENDING_INTERVAL_MS', 5 * 60_000)
+const BUILD_TIMEOUT_MS = envMs('TRENDING_BUILD_TIMEOUT_MS', 10 * 60_000)
 
 /** A source is never allowed to hang the build behind. */
 const SOURCE_TIMEOUT_MS = 15_000
@@ -141,7 +143,12 @@ async function previousIds(hours: number): Promise<ReadonlySet<Hex>> {
   }
 }
 
-async function buildOne(hours: Window, relays: readonly RelayUrl[]): Promise<BuildResult> {
+async function buildOne(
+  hours: Window,
+  relays: readonly RelayUrl[],
+  progress: (stage: string) => void,
+): Promise<BuildResult> {
+  progress(`${hours}h: candidate index`)
   /* Both indexes asked. */
   const [wine] = await Promise.allSettled([fetchWine(hours, SOURCE_TIMEOUT_MS)])
   const named: { name: string; result: SourceResult }[] = []
@@ -152,6 +159,7 @@ async function buildOne(hours: Window, relays: readonly RelayUrl[]): Promise<Bui
   const merged = mergeSources(named)
   const missing = merged.filter(entry => entry.event === undefined).map(entry => entry.id)
   if (missing.length > 0) {
+    progress(`${hours}h: resolve notes and profiles`)
     const resolved = await resolveNotes(missing, relays)
     if (resolved.events.length > 0 || resolved.profiles.length > 0) {
       named.push({
@@ -178,6 +186,7 @@ async function buildOne(hours: Window, relays: readonly RelayUrl[]): Promise<Bui
   /* TWO PASSES, because demoting a note promotes another one that was never checked. */
   const MAX_PASSES = 25
   /** What this window published last time, read once and used only to break ties. */
+  progress(`${hours}h: previous snapshot`)
   const incumbents = await previousIds(hours)
   const shown = new Map<Hex, VerifiedCounts>()
   /** Notes this build has ALREADY ASKED ABOUT, answered. */
@@ -194,6 +203,7 @@ async function buildOne(hours: Window, relays: readonly RelayUrl[]): Promise<Bui
     const wanted = new Set(uncheckedIds)
     const unchecked = survivors.payload.notes.filter(row => wanted.has(row.id))
     for (const id of uncheckedIds) asked.add(id)
+    progress(`${hours}h: recount pass ${pass}`)
     const recount = await recountReplies(
       unchecked.map(row => ({
         id: row.id,
@@ -231,6 +241,7 @@ async function buildOne(hours: Window, relays: readonly RelayUrl[]): Promise<Bui
       buildWindow(hours, named, at, shown, incumbents).payload.notes.map(row => row.pubkey as Hex),
     ),
   ]
+  progress(`${hours}h: NIP-05 verification`)
   const verifiedAuthors = await verifiedNip05(candidateAuthors, profileEvents).catch(
     () => new Set<Hex>(),
   )
@@ -263,6 +274,12 @@ export function uncheckedIn(
 export class TrendingBuilder {
   private timer: ReturnType<typeof setInterval> | undefined
   private running = false
+  private readonly watchdog: BuildWatchdog
+
+  constructor(onStall: (details: StalledBuild) => void) {
+    this.watchdog = new BuildWatchdog(BUILD_TIMEOUT_MS, onStall)
+  }
+
   /** Only ever asked for notes by id and kind-0s. */
   /** The push relay set, widened with the app's own defaults for READING. */
   private readonly relays: RelayUrl[] = [
@@ -277,6 +294,7 @@ export class TrendingBuilder {
   stop(): void {
     if (this.timer !== undefined) clearInterval(this.timer)
     this.timer = undefined
+    this.watchdog.stop()
   }
 
   /** One pass over all three windows. */
@@ -284,14 +302,18 @@ export class TrendingBuilder {
     // A build that overruns its own interval must not start a second copy of itself.
     if (this.running) return
     this.running = true
+    const startedAt = Date.now()
+    this.watchdog.begin('starting')
+    log('info', 'trending: build cycle started', { timeoutMs: BUILD_TIMEOUT_MS })
     try {
       for (const hours of WINDOWS) {
         try {
-          const result = await buildOne(hours, this.relays)
+          const result = await buildOne(hours, this.relays, stage => this.watchdog.progress(stage))
           const breakdown = Object.entries(result.rejected)
             .sort((a, b) => b[1] - a[1])
             .map(([reason, count]) => `${reason}=${count}`)
             .join(' ')
+          this.watchdog.progress(`${hours}h: publish snapshot`)
           await publishSnapshot(hours, result.payload, result.offered, breakdown)
         } catch (error) {
           log('error', `trending: ${hours}h build failed: ${messageOf(error)}`)
@@ -302,13 +324,17 @@ export class TrendingBuilder {
 
       /* The ARTICLES chart, on the same timer and the same relays. */
       try {
+        this.watchdog.progress('articles: resolve and rank')
         const articles = await buildArticles(this.relays)
+        this.watchdog.progress('articles: publish snapshot')
         await publishSnapshot(ARTICLE_WINDOW_HOURS, articles.payload, articles.offered, '')
       } catch (error) {
         log('error', `trending: articles build failed: ${messageOf(error)}`)
       }
     } finally {
+      this.watchdog.stop()
       this.running = false
+      log('info', 'trending: build cycle completed', { elapsedMs: Date.now() - startedAt })
     }
   }
 }

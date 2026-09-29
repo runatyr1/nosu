@@ -76,21 +76,20 @@
 </section>
 <section id="sync-view" hidden>
   <h2>Ditto Relay synchronization</h2>
-  <p class="muted">Public history begins with the last hour. Backfill extends the oldest completed coverage window by one hour. Authenticated private sessions fetch each participating user's accessible history separately.</p>
+  <p class="muted">Live receives new events. Live catch-up repairs missed intervals, beginning with the last hour on a fresh install. Backfill adds an older hour only when requested. Authenticated private sessions fetch each participating user's accessible history separately.</p>
   <div class="actions"><button id="sync-pause" data-action="pause">Pause</button><button id="sync-resume" data-action="resume">Resume</button><button id="sync-backfill" data-action="backfill">Backfill previous hour</button><button id="sync-retry" data-action="retry">Retry</button><label class="toggle"><input id="sync-live" type="checkbox" checked> Live mode</label></div>
   <p id="sync-state" role="status">Checking synchronization…</p>
   <p id="sync-error" class="bad" role="alert"></p>
-  <p class="muted">Live and historical sync share a worker but use separate connections. Historical event totals below cover the public archive; private histories are listed separately. Accepted transfers may include duplicates. Received traffic includes protocol messages; combined totals include private sync. Counters reset when the worker restarts.</p>
+  <p class="muted">Live uses its own peer connection. Live catch-up and backfill share another connection, but their jobs and event counts are separate. Accepted transfers may include duplicates. Combined traffic includes private sync and protocol messages. Counters reset when the worker restarts.</p>
   <div class="sync-grid">
     <article class="sync-sections"><h2>Synchronization</h2>
       <section><h3>Live</h3><dl id="sync-live-metrics"></dl></section>
-      <section><h3>Historical</h3><dl id="sync-history-metrics"></dl>
-        <h3 style="margin-top:18px">Completed coverage windows</h3><pre id="sync-windows">No completed windows yet.</pre>
-      </section>
+      <section><h3>Live catch-up</h3><dl id="sync-catchup-metrics"></dl></section>
+      <section><h3>Backfill</h3><dl id="sync-backfill-metrics"></dl><pre id="sync-windows">No backfill windows completed yet.</pre></section>
       <section><h3>Outbound and private sessions</h3><dl id="sync-coverage"></dl></section>
     </article>
     <article><h2>Combined traffic</h2><dl id="sync-traffic"></dl></article>
-    <article><h2>Totals and regulation</h2><dl id="sync-progress"></dl></article>
+    <article><h2>Combined totals and regulation</h2><dl id="sync-progress"></dl></article>
   </div>
 </section>
 <script>
@@ -193,8 +192,10 @@
     try{
       const response=await fetch('/api/ditto-sync',{cache:'no-store'});const data=await response.json();
       if(!response.ok)throw new Error(data.error||`HTTP ${response.status}`);
-      document.querySelector('#sync-state').textContent=`${data.paused?'Paused':data.activeWindow?'Historical import':'Running'} · Live stream: ${data.live?.state||'unknown'}${data.lastError?' · Needs attention':''} · Checked ${new Date().toLocaleTimeString()}`;
-      document.querySelector('#sync-error').textContent=data.lastError?typeof data.lastError==='string'?data.lastError:JSON.stringify(data.lastError):'';
+      document.querySelector('#sync-state').textContent=`Live: ${data.live?.state||'unknown'} · Live catch-up: ${data.catchup?.state||'unknown'} · Backfill: ${data.backfill?.state||'unknown'} · Checked ${new Date().toLocaleTimeString()}`;
+      const errors=[data.live?.error&&`Live: ${data.live.error}`,data.catchup?.lastError&&`Live catch-up: ${data.catchup.lastError}`,data.backfill?.lastError&&`Backfill: ${data.backfill.lastError}`].filter(Boolean);
+      if(data.lastError&&!errors.some(message=>message.endsWith(data.lastError)))errors.push(`Other sync: ${data.lastError}`);
+      document.querySelector('#sync-error').textContent=errors.join(' · ');
       fields('#sync-live-metrics',[
         ['Status',data.live?.state||'Unavailable'],['Incoming queue',metric(data.live?.queue)],['Queue bytes',metric(data.live?.queueBytes,' bytes')],
         ['Events received',metric(data.live?.received)],['Received events / second',metric(data.live?.receivedEventsPerSecond)],['Events accepted locally',metric(data.live?.accepted)],['Accepted events / second',metric(data.live?.eventsPerSecond)],
@@ -202,14 +203,22 @@
         ['Rejected import attempts',metric(data.live?.rejected)],['Queue overflows',metric(data.live?.overflows)],['Subscriptions opened',metric(data.live?.subscriptions)],
         ['Last recovery',dateLabel(data.live?.recoveredAt)],
       ]);
-      fields('#sync-history-metrics',[
-        ['Peer connection',data.connected?.peer?'Connected':'Disconnected'],['Active window',data.activeWindow?`${dateLabel(data.activeWindow.since)} → ${dateLabel(data.activeWindow.until)}`:'None'],
-        ['IDs identified',metric(data.historyTransfers?.identified)],['IDs remaining',metric(data.historyTransfers?.remaining)],['Queued windows',metric(data.pendingWindows)],
-        ['Oldest covered',dateLabel(data.coverage?.oldest)],['Latest covered',dateLabel(data.coverage?.latest)],
-        ['Events accepted locally',metric(data.history?.accepted)],['Accepted events / second',metric(data.history?.eventsPerSecond)],
-        ['Download requests',metric(data.history?.queries)],['Outstanding download requests',metric(data.history?.pendingRequests)],
-        ['Received traffic / second',metric(data.history?.bytesPerSecond,' B/s')],['Received traffic',metric(data.history?.receivedBytes,' bytes')],
-        ['Rejected import attempts',metric(data.history?.rejected)],['Unavailable after retry',metric(data.history?.unavailable)],
+      fields('#sync-catchup-metrics',[
+        ['Status',data.catchup?.state||'Unavailable'],['Peer connection',data.connected?.peer?'Connected':'Disconnected'],
+        ['Active window',data.catchup?.activeWindow?`${dateLabel(data.catchup.activeWindow.since)} → ${dateLabel(data.catchup.activeWindow.until)}`:'None'],
+        ['Queued windows',metric(data.catchup?.pendingWindows)],['Latest covered',dateLabel(data.catchup?.latestCovered)],
+        ['Reconciliation attempts',metric(data.catchup?.reconciliations)],['IDs identified',metric(data.catchup?.identified)],['IDs remaining',metric(data.catchup?.remaining)],
+        ['Download requests',metric(data.catchup?.queries)],['Outstanding download requests',metric(data.catchup?.pendingRequests)],
+        ['Events accepted locally',metric(data.catchup?.accepted)],['Accepted events / second',metric(data.catchup?.eventsPerSecond)],
+        ['Rejected import attempts',metric(data.catchup?.rejected)],['Unavailable after retry',metric(data.catchup?.unavailable)],
+      ]);
+      fields('#sync-backfill-metrics',[
+        ['Status',data.backfill?.state||'Unavailable'],['Active window',data.backfill?.activeWindow?`${dateLabel(data.backfill.activeWindow.since)} → ${dateLabel(data.backfill.activeWindow.until)}`:'None'],
+        ['Queued windows',metric(data.backfill?.pendingWindows)],['Completed ranges',metric(data.backfill?.completedWindows?.length)],
+        ['Reconciliation attempts',metric(data.backfill?.reconciliations)],['IDs identified',metric(data.backfill?.identified)],['IDs remaining',metric(data.backfill?.remaining)],
+        ['Download requests',metric(data.backfill?.queries)],['Outstanding download requests',metric(data.backfill?.pendingRequests)],
+        ['Events accepted locally',metric(data.backfill?.accepted)],['Accepted events / second',metric(data.backfill?.eventsPerSecond)],
+        ['Rejected import attempts',metric(data.backfill?.rejected)],['Unavailable after retry',metric(data.backfill?.unavailable)],
       ]);
       fields('#sync-coverage',[
         ['Public peer',data.peer||'Unavailable'],['Peer connection',data.connected?.peer?'Connected':'Disconnected'],['Local connection',data.connected?.local?'Connected':'Disconnected'],
@@ -218,16 +227,16 @@
         ['Private histories failed',metric(data.sessions?.failed)],['Last activity',dateLabel(data.lastActivity)],
       ]);
       fields('#sync-traffic',[
-        ['Requests / second',metric(data.rates?.requestsPerSecond)],['Events / second',metric(data.rates?.eventsPerSecond)],['Bandwidth',metric(data.rates?.bytesPerSecond,' B/s')],
+        ['Requests / second (all paths)',metric(data.rates?.requestsPerSecond)],['Events / second (all paths)',metric(data.rates?.eventsPerSecond)],['Bandwidth (all paths)',metric(data.rates?.bytesPerSecond,' B/s')],
         ['Outstanding requests',metric(data.pendingRequests)],
-        ['Outstanding acknowledgements',metric(data.pendingAcks)],['Download queue bytes',metric(data.queueBytes?.downloads,' bytes')],['Upload queue bytes',metric(data.queueBytes?.uploads,' bytes')],
+        ['Outstanding acknowledgements',metric(data.pendingAcks)],['Upload queue bytes',metric(data.queueBytes?.uploads,' bytes')],
         ['Indexing backlog',data.indexingBacklog===undefined?'Unavailable (local OK confirms storage)':metric(data.indexingBacklog)],
       ]);
       fields('#sync-progress',[
-        ['Downloaded',metric(data.counters?.downloaded)],['Uploaded',metric(data.counters?.uploaded)],['Requests (all sockets)',metric(data.counters?.requests)],['Rejections',metric(data.counters?.rejected)],['Policy exclusions',metric(data.counters?.policySkipped)],['Unavailable after retry',metric(data.counters?.missingAtTransfer)],['Retries',metric(data.counters?.retries)],['Transferred',metric(data.counters?.bytes,' bytes')],
+        ['Events imported',metric(data.counters?.downloaded)],['Events exported',metric(data.counters?.uploaded)],['Requests (all sockets)',metric(data.counters?.requests)],['Rejections',metric(data.counters?.rejected)],['Policy exclusions',metric(data.counters?.policySkipped)],['Unavailable after retry',metric(data.counters?.missingAtTransfer)],['Retries',metric(data.counters?.retries)],['Transferred',metric(data.counters?.bytes,' bytes')],
         ['Download batch',metric(data.limits?.batchSize,' IDs')],['Request interval',metric(data.limits?.requestIntervalMs,' ms')],['Upload interval',metric(data.limits?.uploadIntervalMs,' ms')],['Queue limit',metric(data.limits?.maxQueue)],['Queue byte limit',metric(data.limits?.maxQueueBytes,' bytes')],['Outbound byte pacing',metric(data.limits?.bandwidthBytesPerSecond,' B/s')],
       ]);
-      document.querySelector('#sync-windows').textContent=data.coverage?.windows?.length?data.coverage.windows.map(window=>`${dateLabel(window.since)} → ${dateLabel(window.until)}`).join('\n'):'No completed windows yet.';
+      document.querySelector('#sync-windows').textContent=data.backfill?.completedWindows?.length?data.backfill.completedWindows.map(window=>`${dateLabel(window.since)} → ${dateLabel(window.until)}`).join('\n'):'No backfill windows completed yet.';
       if(!controlBusy){document.querySelector('#sync-pause').disabled=Boolean(data.paused);document.querySelector('#sync-resume').disabled=!data.paused;}
     }catch(error){document.querySelector('#sync-state').textContent='Synchronization status unavailable';document.querySelector('#sync-error').textContent=error.message;}
     finally{syncBusy=false;}

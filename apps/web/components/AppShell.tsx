@@ -175,9 +175,6 @@ export function AppShell({
           {relaySync.status.state === 'error' && <button type="button" onClick={relaySync.retry} className="ml-2 underline">Retry</button>}
         </div>
       )}
-      {pathname.startsWith('/chat') && process.env.NEXT_PUBLIC_LOCAL_RELAY_ONLY === 'true' && (
-        <div className="px-4 py-2 text-sm text-muted-foreground">Messages use this instance’s relay. Delivery to other clients depends on them reading the sync peer.</div>
-      )}
       {/* The pages the reader has not opened yet, warmed once this one is idle. */}
       <Prefetch pubkey={chatPubkey} />
 

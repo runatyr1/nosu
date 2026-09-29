@@ -57,7 +57,7 @@ export interface NostrichPoolOptions {
   /** Notify deployment adapters only after a relay accepted a signed event. */
   onPublished?: (event: NostrEvent, relay: RelayUrl) => void
   /** Deployment content routing; signer and wallet transports should bypass this. */
-  routeRelayUrls?: (urls: RelayUrl[], filters: Filter[]) => RelayUrl[]
+  routeRelayUrls?: (urls: RelayUrl[], filters: Filter[], operation?: 'read' | 'write') => RelayUrl[]
   /** Initial relay set. */
   relays?: readonly RelayEntry[]
   /** Injected by tests. */
@@ -734,17 +734,17 @@ export class NostrichPool implements Pool {
   // ------------------------------------------------------------------------- Publishing.
 
   async publish(event: NostrEvent, relays?: RelayUrl[]): Promise<PublishResult[]> {
-    /** A RELAY MARKED READ-ONLY IS NEVER PUBLISHED. */
-    const requested = this.targets(relays !== undefined ? normalizeRelayUrls(relays) : this.writeRelayUrls(), [{ kinds: [event.kind] }])
-    const targets = requested.filter(url => this.records.get(url)?.policy.write !== false)
+    // Posts policies must not block explicit inbox delivery or relay-list announcements.
+    const requested = this.targets(relays !== undefined ? normalizeRelayUrls(relays) : this.writeRelayUrls(), [{ kinds: [event.kind] }], 'write')
+    const targets = requested.filter(url => (relays !== undefined && [4, 1059, 10002, 10050].includes(event.kind)) || this.records.get(url)?.policy.write !== false)
     // Promise.all over branches that cannot reject: one relay refusing a note is routine.
     return Promise.all(targets.map(url => this.publishTo(event, url)))
   }
 
   /** Publish, answering the moment ONE relay accepts. */
   async publishFirstAccept(event: NostrEvent, relays?: RelayUrl[]): Promise<boolean> {
-    const requested = this.targets(relays !== undefined ? normalizeRelayUrls(relays) : this.writeRelayUrls(), [{ kinds: [event.kind] }])
-    const targets = requested.filter(url => this.records.get(url)?.policy.write !== false)
+    const requested = this.targets(relays !== undefined ? normalizeRelayUrls(relays) : this.writeRelayUrls(), [{ kinds: [event.kind] }], 'write')
+    const targets = requested.filter(url => (relays !== undefined && [4, 1059, 10002, 10050].includes(event.kind)) || this.records.get(url)?.policy.write !== false)
     if (targets.length === 0) return false
     return new Promise<boolean>(resolve => {
       let pending = targets.length
@@ -833,8 +833,8 @@ export class NostrichPool implements Pool {
     }
   }
 
-  private targets(urls: RelayUrl[], filters: Filter[]): RelayUrl[] {
-    return this.routeRelayUrls?.(urls, filters) ?? urls
+  private targets(urls: RelayUrl[], filters: Filter[], operation: 'read' | 'write' = 'read'): RelayUrl[] {
+    return this.routeRelayUrls?.(urls, filters, operation) ?? urls
   }
 
   private authenticate(relay: UnderlyingRelay): Promise<void> {

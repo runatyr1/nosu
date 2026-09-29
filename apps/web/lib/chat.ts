@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react'
 import {
   DEFAULT_DM_RELAYS,
-  DEFAULT_RELAYS,
   buildDirectMessage,
   buildDmRelayList,
   conversationKeyOf,
@@ -26,7 +25,8 @@ import {
 
 import { firstLookAt } from './first-look'
 import { activeScope, readScoped, writeScoped } from './scope'
-import { getPool, routeContentRelays } from './pool'
+import { getPool } from './pool'
+import { getSavedRelayControls, useDmRoutingKey } from './relay-controls'
 
 /** Private messages (NIP-17), for the whole session. */
 
@@ -166,7 +166,7 @@ export function markConversationRead(key: string, at: number): void {
 
 // --------------------------------------------------------------------------- Syncing.
 
-let syncing: { pubkey: Hex; stop: () => void } | undefined
+let syncing: { pubkey: Hex; routingKey: string; stop: () => void } | undefined
 
 type Envelope = { legacy: false; event: NostrEvent } | { legacy: true; event: NostrEvent }
 const queue: Envelope[] = []
@@ -257,6 +257,8 @@ function newestDmList(events: readonly NostrEvent[]): DmRelayList | null {
 
 /** Where our own gift wraps are delivered. */
 export async function ownDmRelays(pubkey: Hex): Promise<RelayUrl[]> {
+  const saved = getSavedRelayControls()
+  if (saved) return saved.rows.filter(row => row.dms).map(row => row.url)
   const outcome = await getPool().queryWithStatus(
     [dmRelayListFilter([pubkey])],
     undefined,
@@ -278,6 +280,7 @@ export async function ownDmRelays(pubkey: Hex): Promise<RelayUrl[]> {
 
 /** Create a kind-10050 for this account, but only if it truly has none. */
 export async function ensureDmRelayList(signer: Signer, pubkey: Hex): Promise<void> {
+  if (getSavedRelayControls()) return
   const outcome = await getPool().queryWithStatus(
     [dmRelayListFilter([pubkey])],
     undefined,
@@ -297,8 +300,8 @@ export async function ensureDmRelayList(signer: Signer, pubkey: Hex): Promise<vo
   emit()
 }
 
-export function startChatSync(signer: Signer, pubkey: Hex): void {
-  if (syncing?.pubkey === pubkey) return
+export function startChatSync(signer: Signer, pubkey: Hex, routingKey = ''): void {
+  if (syncing?.pubkey === pubkey && syncing.routingKey === routingKey) return
   stopChatSync()
 
   state.loading = true
@@ -345,7 +348,7 @@ export function startChatSync(signer: Signer, pubkey: Hex): void {
         { kinds: [LEGACY_KIND], '#p': [pubkey], limit: LEGACY_LIMIT },
         { kinds: [LEGACY_KIND], authors: [pubkey], limit: LEGACY_LIMIT },
       ],
-      relays: [...new Set([...relays, ...normalizeRelayUrls([...DEFAULT_RELAYS])])],
+      relays,
       onEvent: event => enqueue(event, true),
     })
 
@@ -359,6 +362,7 @@ export function startChatSync(signer: Signer, pubkey: Hex): void {
 
   syncing = {
     pubkey,
+    routingKey,
     stop: () => {
       closed = true
       handle?.close()
@@ -413,13 +417,10 @@ export async function sendChatMessage(
   content: string,
 ): Promise<SendResult> {
   const { message, wraps } = await buildDirectMessage(signer, participants, content)
-  // An explicit operator test route selects the local destination even when
-  // a fresh relay has no historical kind-10050 metadata. Normal NIP-17 routing
-  // remains strict about each participant's nominated inbox relays.
-  const localRelays = routeContentRelays([], [{ kinds: [1059] }])
-  const { deliveries, undeliverable: unrouted } = localRelays.length
-    ? { deliveries: wraps.map(wrap => ({ ...wrap, relays: localRelays })), undeliverable: [] }
-    : routeWraps(wraps, await fetchRelayLists(participants))
+  const lists = await fetchRelayLists([...participants, message.senderPubkey])
+  const saved = getSavedRelayControls()
+  if (saved) lists.set(message.senderPubkey, { pubkey: message.senderPubkey, relays: saved.rows.filter(row => row.dms).map(row => row.url), updatedAt: Math.floor(Date.now() / 1000) })
+  const { deliveries, undeliverable: unrouted } = routeWraps(wraps, lists)
   /* The sender is one of the wraps and is not a participant to warn. */
   const undeliverable = unrouted.filter(pubkey => pubkey !== message.senderPubkey)
 
@@ -564,6 +565,7 @@ export function useChat(self: Hex | undefined): ChatView {
 
 /** Keeps the session's sync running for as long as a signed-in screen is mounted. */
 export function useChatSync(signer: Signer | undefined, pubkey: Hex | undefined): void {
+  const routingKey = useDmRoutingKey()
   useEffect(() => {
     if (signer === undefined || pubkey === undefined) {
       stopChatSync()
@@ -571,9 +573,9 @@ export function useChatSync(signer: Signer | undefined, pubkey: Hex | undefined)
     }
     // Also here, not only in `useChat`: the sync runs app-wide while the chat screen may.
     ensureScope()
-    startChatSync(signer, pubkey)
+    startChatSync(signer, pubkey, routingKey)
     // Deliberately NOT stopped on unmount: navigating away from /chat and back would.
-  }, [signer, pubkey])
+  }, [signer, pubkey, routingKey])
 }
 
 export function useMarkRead(): (key: string, at: number) => void {

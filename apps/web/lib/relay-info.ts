@@ -6,6 +6,7 @@ import { tryNormalizeRelayUrl, type RelayUrl } from '@nostrich/nostr'
 
 export interface RelayInfo {
   name?: string
+  supportedNips?: number[]
   paymentRequired: boolean
   authRequired: boolean
   restrictedWrites: boolean
@@ -54,10 +55,14 @@ export async function fetchRelayInfo(relay: RelayUrl): Promise<RelayInfo | undef
       cache.set(relay, null)
       return undefined
     }
-    const doc = body as { name?: unknown; limitation?: Record<string, unknown> }
+    const doc = body as { name?: unknown; supported_nips?: unknown; limitation?: Record<string, unknown> }
     const limits = typeof doc.limitation === 'object' && doc.limitation !== null ? doc.limitation : {}
     const info: RelayInfo = {
       ...(typeof doc.name === 'string' && doc.name !== '' ? { name: doc.name } : {}),
+      ...(Array.isArray(doc.supported_nips)
+        ? { supportedNips: [...new Set(doc.supported_nips.filter((nip): nip is number =>
+          typeof nip === 'number' && Number.isSafeInteger(nip) && nip >= 0))] }
+        : {}),
       paymentRequired: bool(limits['payment_required']),
       authRequired: bool(limits['auth_required']),
       restrictedWrites: bool(limits['restricted_writes']),

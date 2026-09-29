@@ -18,6 +18,15 @@ function harness(target = 'wss://relay.example/') {
 }
 
 describe('pool NIP-42 authentication', () => {
+  it('keeps explicit inbox delivery and metadata independent from a Posts read-only policy', async () => {
+    const h = harness()
+    h.relay.publish = vi.fn().mockResolvedValue('accepted')
+    h.pool.setRelays([{ url: 'wss://relay.example', policy: { read: true, write: false } }])
+    expect(await h.pool.publish({ kind: 1 } as NostrEvent, ['wss://relay.example'])).toEqual([])
+    for (const kind of [1059, 10050, 10002]) expect((await h.pool.publish({ kind } as NostrEvent, ['wss://relay.example']))[0]?.ok).toBe(true)
+    expect(await h.pool.publishFirstAccept({ kind: 1059 } as NostrEvent, ['wss://relay.example'])).toBe(true)
+    h.pool.close()
+  })
   it('authenticates once and retries an auth-required publication', async () => {
     const h = harness()
     const result = await h.pool.publish({ kind: 1 } as NostrEvent)

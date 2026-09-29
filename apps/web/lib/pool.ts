@@ -1,5 +1,5 @@
 import { createPool, type Hex, type Pool, type Filter, type RelayUrl, type NostrEvent } from '@nostrich/nostr'
-import { SERVICE_CONFIG } from '../../../packages/nostr/service-config'
+import { defaultRelayControls, getSavedRelayControls, localRelayUrl, postEntries } from './relay-controls'
 
 import { readCachedNip05, readCachedProfile } from './profile-cache'
 import { rejectEvent } from './spam'
@@ -19,11 +19,11 @@ export function getPool(): Pool {
   if (pool === undefined) {
     /** `reject` is the one filter that lives this low. */
     pool = createPool({
+      relays: postEntries(getSavedRelayControls() ?? defaultRelayControls()),
       reject: event => rejectEvent(event, hasVerifiedNip05, cachedNames),
       routeRelayUrls: routeContentRelays,
       onPublished: (event, relay) => {
-        if (process.env.NEXT_PUBLIC_LOCAL_RELAY_ONLY !== 'true') return
-        const target = routeContentRelays([], [{ kinds: [event.kind] }])[0]
+        const target = localRelayUrl()
         if (relay === target) publicationForwarder?.(event)
       },
     })
@@ -32,12 +32,11 @@ export function getPool(): Pool {
 }
 
 /** Local deployment tests preserve signer rendezvous and NWC transports. */
-export function routeContentRelays(urls: RelayUrl[], filters: Filter[]): RelayUrl[] {
-  if (process.env.NEXT_PUBLIC_LOCAL_RELAY_ONLY !== 'true' || typeof window === 'undefined') return urls
-  if (filters.some(filter => filter.kinds?.some(kind => kind === 24133 || kind === 23194 || kind === 23195))) return urls
-  const target = new URL(SERVICE_CONFIG.localRelayPath, window.location.origin)
-  target.protocol = target.protocol === 'https:' ? 'wss:' : 'ws:'
-  return [target.href as RelayUrl]
+export function routeContentRelays(urls: RelayUrl[], filters: Filter[], operation: 'read' | 'write' = 'read'): RelayUrl[] {
+  if (typeof window === 'undefined') return urls
+  const independent = [4, 1059, 10002, 10050, 24133, 23194, 23195]
+  if (filters.length && filters.every(filter => filter.kinds?.length && filter.kinds.every(kind => independent.includes(kind)))) return urls
+  return postEntries(getSavedRelayControls() ?? defaultRelayControls()).filter(entry => entry.policy[operation]).map(entry => entry.url)
 }
 
 /** Whether this author's NIP-05 is known-good, answered from cache alone. */

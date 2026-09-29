@@ -1,20 +1,15 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useLayoutEffect } from 'react'
+import { getPool } from './pool'
+import { defaultRelayControls, postEntries, useSavedRelayControls } from './relay-controls'
+import { useSession } from '../components/SessionProvider'
 
-import { applyRelaysToPool } from './relay-prefs'
-import { parseRelayCookie } from './relay-cookie'
-
-const COOKIE = 'nostrich_relays'
-
-/** Hand the reader's stored relay list to the pool, once, on load. */
+/** Apply account settings before content subscriptions attach, including account switches. */
 export function useStoredRelays(): void {
-  useEffect(() => {
-    if (typeof document === 'undefined') return
-    const match = document.cookie.split('; ').find(row => row.startsWith(`${COOKIE}=`))
-    if (match === undefined) return
-    const stored = parseRelayCookie(decodeURIComponent(match.slice(COOKIE.length + 1)))
-    if (stored === null) return
-    applyRelaysToPool(stored.urls, stored.policies ?? {})
-  }, [])
+  const { session } = useSession()
+  const saved = useSavedRelayControls()
+  const serialized = JSON.stringify(saved)
+  const account = session.status === 'anonymous' ? undefined : session.pubkey
+  useLayoutEffect(() => { getPool().setRelays(postEntries(saved ?? defaultRelayControls())) }, [serialized, account])
 }

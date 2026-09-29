@@ -43,11 +43,17 @@
   .toggle{display:flex;align-items:center;gap:6px}
   .node.ditto-relay{cursor:pointer}.node.ditto-relay:hover,.node.ditto-relay:focus-visible{border-color:#96d8f5;outline:2px solid #96d8f5}
   .sync-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin:20px 0;align-items:start}
-  .sync-sections section+section{border-top:1px solid #33475f;margin-top:22px;padding-top:18px}
-  .sync-sections h3{margin:0 0 12px;font-size:1rem}
+  .sync-card{background:#162337;border:1px solid #33475f;border-radius:12px;padding:18px;min-width:0}
+  .sync-card summary{font-size:1.1rem;font-weight:700;cursor:pointer;list-style-position:inside}
+  .sync-card summary:focus-visible{outline:2px solid #96d8f5;outline-offset:4px}
+  .sync-card[open] summary{margin-bottom:16px}
+  .sync-card[open] .sync-preview{display:none}
+  .sync-preview{display:grid;grid-template-columns:minmax(0,62%) minmax(0,38%);gap:8px 0;margin-top:14px;font-size:.9rem;font-weight:400}
+  .sync-preview .label{color:#a9b9cb;padding-right:10px}
+  .sync-preview .value{text-align:right;overflow-wrap:anywhere;min-width:0}
   @media(max-width:1100px){.sync-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
   @media(max-width:760px){.sync-grid{grid-template-columns:minmax(0,1fr)}}
-  dl{display:grid;grid-template-columns:1fr auto;gap:10px;margin:0}dt{color:#a9b9cb}dd{margin:0;text-align:right;overflow-wrap:anywhere;max-width:260px}
+  dl{display:grid;grid-template-columns:minmax(0,62%) minmax(0,38%);gap:10px 0;margin:0}dt{color:#a9b9cb;min-width:0;padding-right:10px}dd{margin:0;min-width:0;text-align:right;overflow-wrap:anywhere}
   #sync-windows{min-height:0;max-height:200px}button:disabled{opacity:.5;cursor:wait}
 </style>
 <header class="top"><div><h1>Nosu Controller</h1><span class="muted">Local deployment overview</span></div><div class="actions"><button id="overview-button" hidden>Overview</button><button id="sync-button">Ditto Relay</button><button id="logs-button">Logs</button><button id="refresh">Refresh</button></div></header>
@@ -82,14 +88,12 @@
   <p id="sync-error" class="bad" role="alert"></p>
   <p class="muted">Live uses its own peer connection. Live catch-up and backfill share a failover peer for both NIP-77 comparison and event downloads. Each completed window covers its selected peer, not all peers. Accepted transfers may include duplicates. Combined traffic includes private sync and protocol messages. Counters reset when the worker restarts.</p>
   <div class="sync-grid">
-    <article class="sync-sections"><h2>Synchronization</h2>
-      <section><h3>Live</h3><dl id="sync-live-metrics"></dl></section>
-      <section><h3>Live catch-up</h3><dl id="sync-catchup-metrics"></dl></section>
-      <section><h3>Backfill</h3><dl id="sync-backfill-metrics"></dl><pre id="sync-windows">No backfill windows completed yet.</pre></section>
-      <section><h3>Outbound and private sessions</h3><dl id="sync-coverage"></dl></section>
-    </article>
-    <article><h2>Combined traffic</h2><dl id="sync-traffic"></dl></article>
-    <article><h2>Combined totals and regulation</h2><dl id="sync-progress"></dl></article>
+    <details class="sync-card"><summary>Live<span class="sync-preview" id="sync-live-preview"></span></summary><dl id="sync-live-metrics"></dl></details>
+    <details class="sync-card"><summary>Live catch-up<span class="sync-preview" id="sync-catchup-preview"></span></summary><dl id="sync-catchup-metrics"></dl></details>
+    <details class="sync-card"><summary>Backfill<span class="sync-preview" id="sync-backfill-preview"></span></summary><dl id="sync-backfill-metrics"></dl><pre id="sync-windows">No backfill windows completed yet.</pre></details>
+    <details class="sync-card"><summary>Outbound and private sessions<span class="sync-preview" id="sync-coverage-preview"></span></summary><dl id="sync-coverage"></dl></details>
+    <details class="sync-card"><summary>Combined traffic<span class="sync-preview" id="sync-traffic-preview"></span></summary><dl id="sync-traffic"></dl></details>
+    <details class="sync-card"><summary>Combined totals and regulation<span class="sync-preview" id="sync-progress-preview"></span></summary><dl id="sync-progress"></dl></details>
   </div>
 </section>
 <script>
@@ -187,6 +191,10 @@
     const list=document.querySelector(id);list.replaceChildren();
     for(const [label,value] of values){const dt=document.createElement('dt');dt.textContent=label;const dd=document.createElement('dd');dd.textContent=value;list.append(dt,dd);}
   }
+  function previewFields(id,values){
+    const preview=document.querySelector(id);preview.replaceChildren();
+    for(const [label,value] of values){const name=document.createElement('span');name.className='label';name.textContent=label;const text=document.createElement('span');text.className='value';text.textContent=value;preview.append(name,text);}
+  }
   async function refreshSync(){
     if(syncBusy)return;syncBusy=true;
     try{
@@ -238,6 +246,12 @@
         ['Events imported',metric(data.counters?.downloaded)],['Events exported',metric(data.counters?.uploaded)],['Requests (all sockets)',metric(data.counters?.requests)],['Rejections',metric(data.counters?.rejected)],['Policy exclusions',metric(data.counters?.policySkipped)],['Unavailable after retry',metric(data.counters?.missingAtTransfer)],['Retries',metric(data.counters?.retries)],['Transferred',metric(data.counters?.bytes,' bytes')],
         ['Download batch',metric(data.limits?.batchSize,' IDs')],['Request interval',metric(data.limits?.requestIntervalMs,' ms')],['Upload interval',metric(data.limits?.uploadIntervalMs,' ms')],['Queue limit',metric(data.limits?.maxQueue)],['Queue byte limit',metric(data.limits?.maxQueueBytes,' bytes')],['Outbound byte pacing',metric(data.limits?.bandwidthBytesPerSecond,' B/s')],
       ]);
+      previewFields('#sync-live-preview', [['Status',data.live?.state||'Unavailable'],['Selected relay',data.live?.peer||'Unavailable'],['Incoming queue',metric(data.live?.queue)]]);
+      previewFields('#sync-catchup-preview', [['Status',data.catchup?.state||'Unavailable'],['Selected relay',data.catchup?.peer||'Unavailable'],['Latest covered',dateLabel(data.catchup?.latestCovered)]]);
+      previewFields('#sync-backfill-preview', [['Status',data.backfill?.state||'Unavailable'],['Selected relay',data.backfill?.peer||'Unavailable'],['Queued windows',metric(data.backfill?.pendingWindows)]]);
+      previewFields('#sync-coverage-preview', [['Outbound/private relay',data.limits?.peers?.[0]||'Unavailable'],['Public upload queue',metric(data.queues?.uploads)],['Private histories failed',metric(data.sessions?.failed)]]);
+      previewFields('#sync-traffic-preview', [['Requests / second',metric(data.rates?.requestsPerSecond)],['Events / second',metric(data.rates?.eventsPerSecond)],['Bandwidth',metric(data.rates?.bytesPerSecond,' B/s')]]);
+      previewFields('#sync-progress-preview', [['Events imported',metric(data.counters?.downloaded)],['Events exported',metric(data.counters?.uploaded)],['Retries',metric(data.counters?.retries)]]);
       document.querySelector('#sync-windows').textContent=data.backfill?.completedWindows?.length?data.backfill.completedWindows.map(window=>`${dateLabel(window.since)} → ${dateLabel(window.until)}`).join('\n'):'No backfill windows completed yet.';
       if(!controlBusy){document.querySelector('#sync-pause').disabled=Boolean(data.paused);document.querySelector('#sync-resume').disabled=!data.paused;}
     }catch(error){document.querySelector('#sync-state').textContent='Synchronization status unavailable';document.querySelector('#sync-error').textContent=error.message;}

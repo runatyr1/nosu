@@ -1,9 +1,15 @@
-import { createPool, type Hex, type Pool } from '@nostrich/nostr'
+import { createPool, type Hex, type Pool, type Filter, type RelayUrl, type NostrEvent } from '@nostrich/nostr'
+import { SERVICE_CONFIG } from '../../../packages/nostr/service-config'
 
 import { readCachedNip05, readCachedProfile } from './profile-cache'
 import { rejectEvent } from './spam'
 
 let pool: Pool | undefined
+let publicationForwarder: ((event: NostrEvent) => void) | undefined
+
+export function setLocalPublicationForwarder(forwarder?: (event: NostrEvent) => void): void {
+  publicationForwarder = forwarder
+}
 
 /** The one relay pool for the tab. */
 export function getPool(): Pool {
@@ -14,9 +20,24 @@ export function getPool(): Pool {
     /** `reject` is the one filter that lives this low. */
     pool = createPool({
       reject: event => rejectEvent(event, hasVerifiedNip05, cachedNames),
+      routeRelayUrls: routeContentRelays,
+      onPublished: (event, relay) => {
+        if (process.env.NEXT_PUBLIC_LOCAL_RELAY_ONLY !== 'true') return
+        const target = routeContentRelays([], [{ kinds: [event.kind] }])[0]
+        if (relay === target) publicationForwarder?.(event)
+      },
     })
   }
   return pool
+}
+
+/** Local deployment tests preserve signer rendezvous and NWC transports. */
+export function routeContentRelays(urls: RelayUrl[], filters: Filter[]): RelayUrl[] {
+  if (process.env.NEXT_PUBLIC_LOCAL_RELAY_ONLY !== 'true' || typeof window === 'undefined') return urls
+  if (filters.some(filter => filter.kinds?.some(kind => kind === 24133 || kind === 23194 || kind === 23195))) return urls
+  const target = new URL(SERVICE_CONFIG.localRelayPath, window.location.origin)
+  target.protocol = target.protocol === 'https:' ? 'wss:' : 'ws:'
+  return [target.href as RelayUrl]
 }
 
 /** Whether this author's NIP-05 is known-good, answered from cache alone. */

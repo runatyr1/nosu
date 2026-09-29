@@ -1,0 +1,13 @@
+{
+  "localRelay": "ws://ditto-relay:13131/",
+  "peers": ["wss://relay.ditto.pub/"],
+  "batchSize": 25,
+  "requestIntervalMs": 1000,
+  "uploadIntervalMs": 1000,
+  "historySeconds": 3600,
+  "maxQueue": 2000,
+  "maxQueueBytes": 16777216,
+  "maxItems": 100000,
+  "maxMessageBytes": 4194304,
+  "bandwidthBytesPerSecond": 1048576
+}

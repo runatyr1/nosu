@@ -1,6 +1,21 @@
 {$NOSU_SITE_ADDRESS} {
     encode zstd gzip
 
+    handle /relay {
+        rewrite * /
+        reverse_proxy ditto-relay:13131
+    }
+
+    @syncSession path /relay-sync/session /relay-sync/session/* /relay-sync/capabilities
+    handle @syncSession {
+        uri strip_prefix /relay-sync
+        reverse_proxy ditto-sync:13132
+    }
+
+    handle /relay-sync/* {
+        respond "Not found" 404
+    }
+
     handle /groups-app/* {
         reverse_proxy groups:80
     }

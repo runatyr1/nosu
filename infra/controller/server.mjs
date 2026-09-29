@@ -5,7 +5,7 @@ import fs from 'node:fs';
 
 const PORT = Number(process.env.PORT || 3401);
 const html = fs.readFileSync(new URL('./index.html', import.meta.url));
-const LOG_SERVICES = new Set(['nosu', 'groups', 'postgres', 'ingress', 'trending', 'ditto-relay', 'opensearch']);
+const LOG_SERVICES = new Set(['nosu', 'groups', 'postgres', 'ingress', 'trending', 'ditto-relay', 'ditto-sync', 'opensearch']);
 const logs = new Map([...LOG_SERVICES].map(name => [name, []]));
 let nextLogId = 0;
 
@@ -80,9 +80,57 @@ async function checkSearch() {
   }
 }
 
+async function checkDitto() {
+  const relay = await checkHttp('http://ditto-relay:13131/');
+  if (!relay.ok) return relay;
+  try {
+    const response = await fetch('http://ditto-sync:13132/status', { signal: AbortSignal.timeout(4000), cache: 'no-store' });
+    if (!response.ok) throw new Error('Sync unavailable');
+    const sync = await response.json();
+    if (sync.lastError) return { ok: false, detail: 'Relay available; sync needs attention' };
+    if (sync.paused) return { ok: true, detail: 'Relay available; sync paused' };
+    if (!sync.connected?.local || !sync.connected?.peer) return { ok: false, detail: 'Relay available; sync disconnected' };
+    return { ok: true, detail: `Relay available; sync ${sync.phase || 'running'}` };
+  } catch {
+    return { ok: false, detail: 'Relay available; sync unavailable' };
+  }
+}
+
 function json(res, status, value) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
   res.end(JSON.stringify(value));
+}
+
+async function syncProxy(req, res) {
+  try {
+    let body;
+    if (req.method === 'POST') {
+      // Browser control requests are restricted to this loopback dashboard's origin.
+      if (!/^(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/.test(req.headers.host || '') || req.headers.origin !== `http://${req.headers.host}` || !['same-origin', undefined].includes(req.headers['sec-fetch-site'])) {
+        return json(res, 403, { error: 'Use the local controller to control synchronization' });
+      }
+      if (!String(req.headers['content-type'] || '').startsWith('application/json')) return json(res, 415, { error: 'Expected JSON' });
+      let size = 0;
+      const chunks = [];
+      for await (const chunk of req) {
+        size += chunk.length;
+        if (size > 1024) return json(res, 413, { error: 'Request too large' });
+        chunks.push(chunk);
+      }
+      const value = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+      if (!value || !['pause', 'resume', 'backfill', 'retry'].includes(value.action) || Object.keys(value).length !== 1) {
+        return json(res, 400, { error: 'Invalid synchronization action' });
+      }
+      body = JSON.stringify(value);
+    }
+    const upstream = await fetch(`http://ditto-sync:13132/${req.method === 'POST' ? 'control' : 'status'}`, {
+      method: req.method, headers: body ? { 'Content-Type': 'application/json' } : undefined,
+      body, signal: AbortSignal.timeout(5000), cache: 'no-store',
+    });
+    return json(res, upstream.status, await upstream.json());
+  } catch (error) {
+    return json(res, error instanceof SyntaxError ? 400 : 502, { error: error instanceof SyntaxError ? 'Invalid JSON' : 'Synchronization worker unavailable' });
+  }
 }
 
 const server = http.createServer(async (req, res) => {
@@ -90,10 +138,11 @@ const server = http.createServer(async (req, res) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'");
   if (req.method === 'GET' && req.url === '/health/live') return json(res, 200, { ok: true });
-  if (req.method === 'GET' && req.url === '/') {
+  if (req.method === 'GET' && ['/', '/ditto-relay', '/logs'].includes(req.url)) {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     return res.end(html);
   }
+  if (['GET', 'POST'].includes(req.method) && req.url === '/api/ditto-sync') return syncProxy(req, res);
   if (req.method === 'GET' && req.url === '/api/status') {
     const [nosu, groups, postgres, ingress, trending, dittoRelay, opensearch] = await Promise.all([
       checkHttp('http://nosu:3400/api/health/ready'),
@@ -101,13 +150,13 @@ const server = http.createServer(async (req, res) => {
       checkTcp('postgres', 5432),
       checkHttp('http://ingress/api/health/live'),
       checkTrending(),
-      checkHttp('http://ditto-relay:13131/'),
+      checkDitto(),
       checkSearch(),
     ]);
     return json(res, 200, { checkedAt: new Date().toISOString(), services: { nosu, groups, postgres, ingress, trending, 'ditto-relay': dittoRelay, opensearch } });
   }
   const logUrl = new URL(req.url || '/', 'http://localhost');
-  const logMatch = /^\/api\/logs\/(nosu|groups|postgres|ingress|trending|ditto-relay|opensearch)$/.exec(logUrl.pathname);
+  const logMatch = /^\/api\/logs\/(nosu|groups|postgres|ingress|trending|ditto-relay|ditto-sync|opensearch)$/.exec(logUrl.pathname);
   if (req.method === 'GET' && logMatch) {
     const after = Number(logUrl.searchParams.get('after') || 0);
     const entries = logs.get(logMatch[1]);

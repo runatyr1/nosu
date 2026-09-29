@@ -41,8 +41,16 @@
   input[type="search"]{min-width:220px}
   pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#07101d;border:1px solid #33475f;border-radius:10px;padding:16px;min-height:260px;max-height:60vh;overflow:auto;font:13px/1.45 ui-monospace,monospace}
   .toggle{display:flex;align-items:center;gap:6px}
+  .node.ditto-relay{cursor:pointer}.node.ditto-relay:hover,.node.ditto-relay:focus-visible{border-color:#96d8f5;outline:2px solid #96d8f5}
+  .sync-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin:20px 0;align-items:start}
+  .sync-sections section+section{border-top:1px solid #33475f;margin-top:22px;padding-top:18px}
+  .sync-sections h3{margin:0 0 12px;font-size:1rem}
+  @media(max-width:1100px){.sync-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  @media(max-width:760px){.sync-grid{grid-template-columns:minmax(0,1fr)}}
+  dl{display:grid;grid-template-columns:1fr auto;gap:10px;margin:0}dt{color:#a9b9cb}dd{margin:0;text-align:right;overflow-wrap:anywhere;max-width:260px}
+  #sync-windows{min-height:0;max-height:200px}button:disabled{opacity:.5;cursor:wait}
 </style>
-<header class="top"><div><h1>Nosu Controller</h1><span class="muted">Local deployment overview</span></div><div class="actions"><button id="overview-button" hidden>Overview</button><button id="logs-button">Logs</button><button id="refresh">Refresh</button></div></header>
+<header class="top"><div><h1>Nosu Controller</h1><span class="muted">Local deployment overview</span></div><div class="actions"><button id="overview-button" hidden>Overview</button><button id="sync-button">Ditto Relay</button><button id="logs-button">Logs</button><button id="refresh">Refresh</button></div></header>
 <section id="overview">
   <p class="muted">This page checks component health from inside the deployment. It is available only on this machine or through an SSH tunnel.</p>
   <p id="updated" role="status">Checking services…</p>
@@ -54,7 +62,7 @@
     <article class="node groups" data-node="groups"><h2>Groups</h2><div class="state">Checking…</div><p class="muted">Checking connection…</p></article>
     <article class="node trending" data-node="trending"><h2>Trending data</h2><div class="state">Checking…</div><p class="muted">Checking snapshot…</p></article>
     <article class="node postgres" data-node="postgres"><h2>PostgreSQL</h2><div class="state">Checking…</div><p class="muted">Checking connection…</p></article>
-    <article class="node ditto-relay" data-node="ditto-relay"><h2>Ditto Relay</h2><div class="state">Checking…</div><p class="muted">Checking relay…</p></article>
+    <article class="node ditto-relay" data-node="ditto-relay" tabindex="0" role="link" aria-label="Open Ditto Relay synchronization"><h2>Ditto Relay</h2><div class="state">Checking…</div><p class="muted">Checking relay…</p></article>
     <article class="node opensearch" data-node="opensearch"><h2>Search (OpenSearch)</h2><div class="state">Checking…</div><p class="muted">Checking index…</p></article>
   </main></div>
   <p class="muted flow-note">Animated dots show the deployment connections, not measured traffic. <span class="scroll-hint">Scroll sideways to see the full flow.</span></p>
@@ -66,11 +74,33 @@
   <div class="log-controls"><input id="log-search" type="search" placeholder="Filter log lines" aria-label="Search logs"><label class="toggle">Order <select id="log-order" aria-label="Log order"><option value="old">Old first</option><option value="new" selected>New first</option></select></label><label class="toggle"><input id="log-live" type="checkbox"> Live mode</label><button id="log-copy" title="Copy visible logs" aria-label="Copy visible logs">⧉</button><span id="log-state" class="muted" role="status"></span></div>
   <pre id="log-lines" aria-live="off">Select a component.</pre>
 </section>
+<section id="sync-view" hidden>
+  <h2>Ditto Relay synchronization</h2>
+  <p class="muted">Public history begins with the last hour. Backfill extends the oldest completed coverage window by one hour. Authenticated private sessions fetch each participating user's accessible history separately.</p>
+  <div class="actions"><button id="sync-pause" data-action="pause">Pause</button><button id="sync-resume" data-action="resume">Resume</button><button id="sync-backfill" data-action="backfill">Backfill previous hour</button><button id="sync-retry" data-action="retry">Retry</button><label class="toggle"><input id="sync-live" type="checkbox" checked> Live mode</label></div>
+  <p id="sync-state" role="status">Checking synchronization…</p>
+  <p id="sync-error" class="bad" role="alert"></p>
+  <p class="muted">Live and historical sync share a worker but use separate connections. Historical event totals below cover the public archive; private histories are listed separately. Accepted transfers may include duplicates. Received traffic includes protocol messages; combined totals include private sync. Counters reset when the worker restarts.</p>
+  <div class="sync-grid">
+    <article class="sync-sections"><h2>Synchronization</h2>
+      <section><h3>Live</h3><dl id="sync-live-metrics"></dl></section>
+      <section><h3>Historical</h3><dl id="sync-history-metrics"></dl>
+        <h3 style="margin-top:18px">Completed coverage windows</h3><pre id="sync-windows">No completed windows yet.</pre>
+      </section>
+      <section><h3>Outbound and private sessions</h3><dl id="sync-coverage"></dl></section>
+    </article>
+    <article><h2>Combined traffic</h2><dl id="sync-traffic"></dl></article>
+    <article><h2>Totals and regulation</h2><dl id="sync-progress"></dl></article>
+  </div>
+</section>
 <script>
-  const labels = {nosu:'Nosu',groups:'Groups',postgres:'PostgreSQL',ingress:'Web gateway (Caddy)',trending:'Trending data','ditto-relay':'Ditto Relay',opensearch:'Search (OpenSearch)'};
+  const labels = {nosu:'Nosu',groups:'Groups',postgres:'PostgreSQL',ingress:'Web gateway (Caddy)',trending:'Trending data','ditto-relay':'Ditto Relay','ditto-sync':'Ditto synchronization',opensearch:'Search (OpenSearch)'};
   const overview=document.querySelector('#overview');
   const logView=document.querySelector('#log-view');
   const logLines=document.querySelector('#log-lines');
+  const syncView=document.querySelector('#sync-view');
+  let syncBusy=false;
+  let controlBusy=false;
   let selectedService='nosu';
   let entries=[];
   let busyService=null;
@@ -152,27 +182,91 @@
     button.addEventListener('click',()=>selectService(name));
     document.querySelector('#log-tabs').append(button);
   }
-  document.querySelector('#logs-button').addEventListener('click',()=>{
-    overview.hidden=true;logView.hidden=false;
-    document.querySelector('#logs-button').hidden=true;
-    document.querySelector('#overview-button').hidden=false;
-    selectService(selectedService);
-  });
-  document.querySelector('#overview-button').addEventListener('click',()=>{
-    logView.hidden=true;overview.hidden=false;
-    document.querySelector('#overview-button').hidden=true;
-    document.querySelector('#logs-button').hidden=false;
-    drawConnections();refreshStatus();
-  });
-  document.querySelector('#refresh').addEventListener('click',()=>logView.hidden?refreshStatus():refreshLogs(true));
+  function dateLabel(value){return value?new Date(typeof value==='number'?value*1000:value).toLocaleString():'Not yet';}
+  function metric(value,suffix=''){return typeof value==='number'?value.toLocaleString(undefined,{maximumFractionDigits:2})+suffix:'Unavailable';}
+  function fields(id,values){
+    const list=document.querySelector(id);list.replaceChildren();
+    for(const [label,value] of values){const dt=document.createElement('dt');dt.textContent=label;const dd=document.createElement('dd');dd.textContent=value;list.append(dt,dd);}
+  }
+  async function refreshSync(){
+    if(syncBusy)return;syncBusy=true;
+    try{
+      const response=await fetch('/api/ditto-sync',{cache:'no-store'});const data=await response.json();
+      if(!response.ok)throw new Error(data.error||`HTTP ${response.status}`);
+      document.querySelector('#sync-state').textContent=`${data.paused?'Paused':data.activeWindow?'Historical import':'Running'} · Live stream: ${data.live?.state||'unknown'}${data.lastError?' · Needs attention':''} · Checked ${new Date().toLocaleTimeString()}`;
+      document.querySelector('#sync-error').textContent=data.lastError?typeof data.lastError==='string'?data.lastError:JSON.stringify(data.lastError):'';
+      fields('#sync-live-metrics',[
+        ['Status',data.live?.state||'Unavailable'],['Incoming queue',metric(data.live?.queue)],['Queue bytes',metric(data.live?.queueBytes,' bytes')],
+        ['Events received',metric(data.live?.received)],['Received events / second',metric(data.live?.receivedEventsPerSecond)],['Events accepted locally',metric(data.live?.accepted)],['Accepted events / second',metric(data.live?.eventsPerSecond)],
+        ['Received traffic / second',metric(data.live?.bytesPerSecond,' B/s')],['Received traffic',metric(data.live?.receivedBytes,' bytes')],
+        ['Rejected import attempts',metric(data.live?.rejected)],['Queue overflows',metric(data.live?.overflows)],['Subscriptions opened',metric(data.live?.subscriptions)],
+        ['Last recovery',dateLabel(data.live?.recoveredAt)],
+      ]);
+      fields('#sync-history-metrics',[
+        ['Peer connection',data.connected?.peer?'Connected':'Disconnected'],['Active window',data.activeWindow?`${dateLabel(data.activeWindow.since)} → ${dateLabel(data.activeWindow.until)}`:'None'],
+        ['IDs identified',metric(data.historyTransfers?.identified)],['IDs remaining',metric(data.historyTransfers?.remaining)],['Queued windows',metric(data.pendingWindows)],
+        ['Oldest covered',dateLabel(data.coverage?.oldest)],['Latest covered',dateLabel(data.coverage?.latest)],
+        ['Events accepted locally',metric(data.history?.accepted)],['Accepted events / second',metric(data.history?.eventsPerSecond)],
+        ['Download requests',metric(data.history?.queries)],['Outstanding download requests',metric(data.history?.pendingRequests)],
+        ['Received traffic / second',metric(data.history?.bytesPerSecond,' B/s')],['Received traffic',metric(data.history?.receivedBytes,' bytes')],
+        ['Rejected import attempts',metric(data.history?.rejected)],['Unavailable after retry',metric(data.history?.unavailable)],
+      ]);
+      fields('#sync-coverage',[
+        ['Public peer',data.peer||'Unavailable'],['Peer connection',data.connected?.peer?'Connected':'Disconnected'],['Local connection',data.connected?.local?'Connected':'Disconnected'],
+        ['Public upload queue',metric(data.queues?.uploads)],['Public upload queue bytes',metric(data.queueBytes?.uploads,' bytes')],
+        ['Private sessions',metric(data.sessions?.active)],['Private histories syncing',metric(data.sessions?.syncing)],['Private histories completed',metric(data.sessions?.completed)],
+        ['Private histories failed',metric(data.sessions?.failed)],['Last activity',dateLabel(data.lastActivity)],
+      ]);
+      fields('#sync-traffic',[
+        ['Requests / second',metric(data.rates?.requestsPerSecond)],['Events / second',metric(data.rates?.eventsPerSecond)],['Bandwidth',metric(data.rates?.bytesPerSecond,' B/s')],
+        ['Outstanding requests',metric(data.pendingRequests)],
+        ['Outstanding acknowledgements',metric(data.pendingAcks)],['Download queue bytes',metric(data.queueBytes?.downloads,' bytes')],['Upload queue bytes',metric(data.queueBytes?.uploads,' bytes')],
+        ['Indexing backlog',data.indexingBacklog===undefined?'Unavailable (local OK confirms storage)':metric(data.indexingBacklog)],
+      ]);
+      fields('#sync-progress',[
+        ['Downloaded',metric(data.counters?.downloaded)],['Uploaded',metric(data.counters?.uploaded)],['Requests (all sockets)',metric(data.counters?.requests)],['Rejections',metric(data.counters?.rejected)],['Policy exclusions',metric(data.counters?.policySkipped)],['Unavailable after retry',metric(data.counters?.missingAtTransfer)],['Retries',metric(data.counters?.retries)],['Transferred',metric(data.counters?.bytes,' bytes')],
+        ['Download batch',metric(data.limits?.batchSize,' IDs')],['Request interval',metric(data.limits?.requestIntervalMs,' ms')],['Upload interval',metric(data.limits?.uploadIntervalMs,' ms')],['Queue limit',metric(data.limits?.maxQueue)],['Queue byte limit',metric(data.limits?.maxQueueBytes,' bytes')],['Outbound byte pacing',metric(data.limits?.bandwidthBytesPerSecond,' B/s')],
+      ]);
+      document.querySelector('#sync-windows').textContent=data.coverage?.windows?.length?data.coverage.windows.map(window=>`${dateLabel(window.since)} → ${dateLabel(window.until)}`).join('\n'):'No completed windows yet.';
+      if(!controlBusy){document.querySelector('#sync-pause').disabled=Boolean(data.paused);document.querySelector('#sync-resume').disabled=!data.paused;}
+    }catch(error){document.querySelector('#sync-state').textContent='Synchronization status unavailable';document.querySelector('#sync-error').textContent=error.message;}
+    finally{syncBusy=false;}
+  }
+  async function controlSync(action){
+    if(controlBusy)return;controlBusy=true;
+    let controlError='';
+    const buttons=[...syncView.querySelectorAll('button[data-action]')];buttons.forEach(button=>button.disabled=true);
+    try{
+      const response=await fetch('/api/ditto-sync',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})});const data=await response.json();
+      if(!response.ok)throw new Error(data.error||`HTTP ${response.status}`);
+      document.querySelector('#sync-error').textContent='';
+    }catch(error){controlError=error.message;}
+    finally{controlBusy=false;buttons.forEach(button=>button.disabled=false);await refreshSync();if(controlError)document.querySelector('#sync-error').textContent=controlError;}
+  }
+  function showPage(path,push=true){
+    overview.hidden=path!='/';logView.hidden=path!='/logs';syncView.hidden=path!='/ditto-relay';
+    document.querySelector('#overview-button').hidden=!overview.hidden;document.querySelector('#logs-button').hidden=!logView.hidden;document.querySelector('#sync-button').hidden=!syncView.hidden;
+    if(push)history.pushState({},'',path);
+    if(!logView.hidden)selectService(selectedService);else if(!syncView.hidden)refreshSync();else{drawConnections();refreshStatus();}
+  }
+  document.querySelector('#logs-button').addEventListener('click',()=>showPage('/logs'));
+  document.querySelector('#overview-button').addEventListener('click',()=>showPage('/'));
+  document.querySelector('#sync-button').addEventListener('click',()=>showPage('/ditto-relay'));
+  const relayCard=document.querySelector('[data-node="ditto-relay"]');
+  relayCard.addEventListener('click',()=>showPage('/ditto-relay'));
+  relayCard.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();showPage('/ditto-relay');}});
+  for(const button of syncView.querySelectorAll('button[data-action]'))button.addEventListener('click',()=>controlSync(button.dataset.action));
+  window.addEventListener('popstate',()=>showPage(location.pathname,false));
+  document.querySelector('#refresh').addEventListener('click',()=>!syncView.hidden?refreshSync():logView.hidden?refreshStatus():refreshLogs(true));
   document.querySelector('#log-search').addEventListener('input',renderLogs);
   document.querySelector('#log-order').addEventListener('change',renderLogs);
   document.querySelector('#log-copy').addEventListener('click',async()=>{
     try{await navigator.clipboard.writeText(logLines.textContent);document.querySelector('#log-state').textContent='Copied visible logs';}
     catch{document.querySelector('#log-state').textContent='Copy failed';}
   });
-  refreshStatus();
+  showPage(location.pathname,false);
   setInterval(()=>{if(!overview.hidden)refreshStatus();},15000);
   setInterval(()=>{if(!logView.hidden&&document.querySelector('#log-live').checked)refreshLogs();},2500);
+  setInterval(()=>{if(!syncView.hidden&&document.querySelector('#sync-live').checked)refreshSync();},2500);
 </script>
 </html>

@@ -105,6 +105,8 @@ export interface PublishResult {
 
 /** Connection manager over a set of relays. */
 export interface Pool {
+  /** Set active NIP-42 identity; disconnect old authenticated sockets on changes. */
+  setAuthSigner?(signer?: Signer): void
   subscribe(params: SubscribeParams): SubscriptionHandle
   /** Open sockets to these relays ahead of time. */
   warm(relays: readonly RelayUrl[]): Promise<void>

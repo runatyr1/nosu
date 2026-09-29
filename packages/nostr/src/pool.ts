@@ -11,6 +11,8 @@ import type {
   RelayStatus,
   RelayUrl,
   SubscribeParams,
+  Signer,
+  EventTemplate,
   SubscriptionHandle,
   QueryOptions,
 } from './types'
@@ -40,6 +42,7 @@ export interface UnderlyingRelay {
   readonly connected: boolean
   subscribe(filters: Filter[], params: UnderlyingSubscribeParams): UnderlyingSubscription
   publish(event: NostrEvent): Promise<string>
+  auth?(sign: (event: EventTemplate) => Promise<NostrEvent>): Promise<void>
   /** NIP-45. Optional: most relays do not implement it and the caller must cope. */
   count?(filters: Filter[], params: { id?: string | null }): Promise<number>
   close(): void
@@ -51,6 +54,10 @@ export interface UnderlyingPool {
 }
 
 export interface NostrichPoolOptions {
+  /** Notify deployment adapters only after a relay accepted a signed event. */
+  onPublished?: (event: NostrEvent, relay: RelayUrl) => void
+  /** Deployment content routing; signer and wallet transports should bypass this. */
+  routeRelayUrls?: (urls: RelayUrl[], filters: Filter[]) => RelayUrl[]
   /** Initial relay set. */
   relays?: readonly RelayEntry[]
   /** Injected by tests. */
@@ -141,6 +148,7 @@ interface RelayRecord {
 
 /** One subscription's attachment to one relay. */
 interface RelayLeg {
+  authRetried?: boolean
   readonly url: RelayUrl
   sub?: UnderlyingSubscription
   eosed: boolean
@@ -204,6 +212,10 @@ function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promi
 }
 
 export class NostrichPool implements Pool {
+  private readonly onPublished?: NostrichPoolOptions['onPublished']
+  private authSigner?: Signer
+  private readonly authRequests = new Map<UnderlyingRelay, Promise<void>>()
+  private readonly routeRelayUrls?: NostrichPoolOptions['routeRelayUrls']
   private readonly underlying: UnderlyingPool
   private readonly records = new Map<RelayUrl, RelayRecord>()
   private readonly subs = new Set<PoolSubscription>()
@@ -224,6 +236,8 @@ export class NostrichPool implements Pool {
   private readonly reject: ((event: NostrEvent) => boolean) | undefined
 
   constructor(options: NostrichPoolOptions = {}) {
+    this.onPublished = options.onPublished
+    this.routeRelayUrls = options.routeRelayUrls
     // SimplePool matches UnderlyingPool structurally.
     this.underlying = options.underlying ?? (new SimplePool() as unknown as UnderlyingPool)
     this.eoseTimeoutMs = options.eoseTimeoutMs ?? DEFAULT_EOSE_TIMEOUT_MS
@@ -318,7 +332,7 @@ export class NostrichPool implements Pool {
     if (this.disposed) return { close() {} }
 
     const pinned = params.relays !== undefined
-    const targets = pinned ? normalizeRelayUrls(params.relays ?? []) : this.readRelayUrls()
+    const targets = this.targets(pinned ? normalizeRelayUrls(params.relays ?? []) : this.readRelayUrls(), params.filters)
 
     const sub = new PoolSubscription(params, pinned, this.seenCap, s => this.teardown(s))
     this.subs.add(sub)
@@ -340,7 +354,7 @@ export class NostrichPool implements Pool {
     options?: CountOptions,
   ): Promise<number | undefined> {
     if (this.disposed) return undefined
-    const targets = relays !== undefined ? normalizeRelayUrls(relays) : this.readRelayUrls()
+    const targets = this.targets(relays !== undefined ? normalizeRelayUrls(relays) : this.readRelayUrls(), filters)
     const budget = timeoutMs ?? this.queryTimeoutMs
 
     /* Relays already known not to answer COUNT are not asked again. */
@@ -403,9 +417,9 @@ export class NostrichPool implements Pool {
     timeoutMs: number = this.queryTimeoutMs,
     options?: QueryOptions,
   ): Promise<QueryOutcome> {
-    const attempted = (
+    const attempted = this.targets((
       relays !== undefined ? normalizeRelayUrls(relays) : this.readRelayUrls()
-    ).length
+    ), filters).length
     const grace = options?.graceMs ?? this.queryGraceMs
 
     return new Promise<QueryOutcome>(resolve => {
@@ -592,7 +606,14 @@ export class NostrichPool implements Pool {
           sub.params.onRelayEose?.(leg.url)
           this.legEosed(sub, leg)
         },
-        onclose: reason => this.legClosed(sub, leg, reason),
+        onclose: reason => {
+          if (reason.startsWith('auth-required:') && !leg.authRetried && this.authSigner && relay.auth) {
+            leg.authRetried = true
+            void this.authenticate(relay).then(() => {
+              if (!sub.closed && !leg.detached && !this.disposed) void this.attach(sub, leg)
+            }, () => this.legClosed(sub, leg, reason))
+          } else this.legClosed(sub, leg, reason)
+        },
         // Lets the relay skip signature verification for events this subscription already.
         alreadyHaveEvent: id => sub.seen.has(id),
         eoseTimeout: this.eoseTimeoutMs,
@@ -706,7 +727,7 @@ export class NostrichPool implements Pool {
 
   async publish(event: NostrEvent, relays?: RelayUrl[]): Promise<PublishResult[]> {
     /** A RELAY MARKED READ-ONLY IS NEVER PUBLISHED. */
-    const requested = relays !== undefined ? normalizeRelayUrls(relays) : this.writeRelayUrls()
+    const requested = this.targets(relays !== undefined ? normalizeRelayUrls(relays) : this.writeRelayUrls(), [{ kinds: [event.kind] }])
     const targets = requested.filter(url => this.records.get(url)?.policy.write !== false)
     // Promise.all over branches that cannot reject: one relay refusing a note is routine.
     return Promise.all(targets.map(url => this.publishTo(event, url)))
@@ -714,7 +735,7 @@ export class NostrichPool implements Pool {
 
   /** Publish, answering the moment ONE relay accepts. */
   async publishFirstAccept(event: NostrEvent, relays?: RelayUrl[]): Promise<boolean> {
-    const requested = relays !== undefined ? normalizeRelayUrls(relays) : this.writeRelayUrls()
+    const requested = this.targets(relays !== undefined ? normalizeRelayUrls(relays) : this.writeRelayUrls(), [{ kinds: [event.kind] }])
     const targets = requested.filter(url => this.records.get(url)?.policy.write !== false)
     if (targets.length === 0) return false
     return new Promise<boolean>(resolve => {
@@ -749,7 +770,7 @@ export class NostrichPool implements Pool {
     try {
       const relay = await this.underlying.ensureRelay(url, { connectionTimeout: this.connectTimeoutMs })
       const reason = await withTimeout(
-        relay.publish(event),
+        this.publishAuthenticated(relay, event),
         this.publishTimeoutMs,
         `publish to ${url} timed out`,
       )
@@ -758,6 +779,7 @@ export class NostrichPool implements Pool {
       record.status.latencyMs = Math.max(0, this.now() - startedAt)
       record.failures = 0
       record.nextAttemptAt = 0
+      try { this.onPublished?.(event, url) } catch { /* Adapter failures must not erase a successful relay acknowledgement. */ }
       return { relay: url, ok: true, message: reason === '' ? undefined : reason }
     } catch (err) {
       const message = messageOf(err)
@@ -768,6 +790,54 @@ export class NostrichPool implements Pool {
   }
 
   // ------------------------------------------------------------------------- Teardown.
+
+  /** Disconnect authenticated sockets when the active identity changes. */
+  setAuthSigner(signer?: Signer): void {
+    if (this.authSigner === signer) return
+    this.authSigner = signer
+    this.authRequests.clear()
+    this.underlying.close([...this.records.keys()])
+    for (const sub of this.subs) {
+      for (const leg of sub.legs.values()) {
+        leg.authRetried = false
+        leg.sub = undefined
+        if (!leg.detached) this.scheduleReattach(sub, leg)
+      }
+    }
+  }
+
+  private targets(urls: RelayUrl[], filters: Filter[]): RelayUrl[] {
+    return this.routeRelayUrls?.(urls, filters) ?? urls
+  }
+
+  private authenticate(relay: UnderlyingRelay): Promise<void> {
+    const existing = this.authRequests.get(relay)
+    if (existing) return existing
+    const signer = this.authSigner
+    if (!signer || !relay.auth) return Promise.reject(new Error('Relay authentication unavailable'))
+    const pending = relay.auth(async template => {
+      const target = template.tags.find(tag => tag[0] === 'relay')?.[1]
+      const challenge = template.tags.find(tag => tag[0] === 'challenge')?.[1]
+      if (this.authSigner !== signer || template.kind !== 22242 || !challenge ||
+          tryNormalizeRelayUrl(target ?? '') !== tryNormalizeRelayUrl(relay.url)) {
+        throw new Error('Invalid relay authentication request')
+      }
+      const event = await signer.signEvent(template)
+      if (this.authSigner !== signer) throw new Error('Account changed during relay authentication')
+      return event
+    })
+    this.authRequests.set(relay, pending)
+    void pending.catch(() => { if (this.authRequests.get(relay) === pending) this.authRequests.delete(relay) })
+    return pending
+  }
+
+  private async publishAuthenticated(relay: UnderlyingRelay, event: NostrEvent): Promise<string> {
+    try { return await relay.publish(event) } catch (error) {
+      if (!messageOf(error).startsWith('auth-required:') || !this.authSigner || !relay.auth) throw error
+      await this.authenticate(relay)
+      return relay.publish(event)
+    }
+  }
 
   close(): void {
     if (this.disposed) return

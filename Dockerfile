@@ -11,6 +11,8 @@ FROM base AS build
 ENV NEXT_TELEMETRY_DISABLED=1
 ARG NEXT_PUBLIC_APP_URL
 ARG NEXT_PUBLIC_GROUPS_APP_URL=/groups-app/
+ARG NEXT_PUBLIC_LOCAL_RELAY_ONLY=false
+ENV NEXT_PUBLIC_LOCAL_RELAY_ONLY=$NEXT_PUBLIC_LOCAL_RELAY_ONLY
 
 # Manifests first, sources later, so the install layer stays cached until the
 # lockfile actually changes.

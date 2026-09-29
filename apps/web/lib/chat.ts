@@ -26,7 +26,7 @@ import {
 
 import { firstLookAt } from './first-look'
 import { activeScope, readScoped, writeScoped } from './scope'
-import { getPool } from './pool'
+import { getPool, routeContentRelays } from './pool'
 
 /** Private messages (NIP-17), for the whole session. */
 
@@ -413,8 +413,13 @@ export async function sendChatMessage(
   content: string,
 ): Promise<SendResult> {
   const { message, wraps } = await buildDirectMessage(signer, participants, content)
-  const lists = await fetchRelayLists(participants)
-  const { deliveries, undeliverable: unrouted } = routeWraps(wraps, lists)
+  // An explicit operator test route selects the local destination even when
+  // a fresh relay has no historical kind-10050 metadata. Normal NIP-17 routing
+  // remains strict about each participant's nominated inbox relays.
+  const localRelays = routeContentRelays([], [{ kinds: [1059] }])
+  const { deliveries, undeliverable: unrouted } = localRelays.length
+    ? { deliveries: wraps.map(wrap => ({ ...wrap, relays: localRelays })), undeliverable: [] }
+    : routeWraps(wraps, await fetchRelayLists(participants))
   /* The sender is one of the wraps and is not a participant to warn. */
   const undeliverable = unrouted.filter(pubkey => pubkey !== message.senderPubkey)
 

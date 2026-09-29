@@ -345,6 +345,15 @@ compose() {
 }
 
 if [ "$ACTION" = install ] || [ "$ACTION" = update ]; then
+  if ! grep -q '^DITTO_RELAY_URL=' "$CONFIG"; then
+    relay_origin=$(config_value NOSU_PUBLIC_URL)
+    case "$relay_origin" in
+      https://*) relay_url="wss://${relay_origin#https://}/relay" ;;
+      http://*) relay_url="ws://${relay_origin#http://}/relay" ;;
+      *) die 'NOSU_PUBLIC_URL must be an HTTP origin' ;;
+    esac
+    printf '\nDITTO_RELAY_URL=%s\n' "$relay_url" >> "$CONFIG"
+  fi
   if ! grep -q '^DITTO_NSEC=' "$CONFIG"; then
     say 'Building Ditto Relay and generating its signing key...'
     docker_cmd build -t nosu-ditto-relay:local "$ROOT/apps/ditto-relay"
@@ -375,7 +384,7 @@ case "$ACTION" in
     say 'Nosu containers rebuilt and replaced. Data volumes and infra/.env kept.'
     ;;
   status) compose ps ;;
-  logs) compose logs --tail=120 -f nosu groups trending postgres ingress controller ditto-relay opensearch ;;
+  logs) compose logs --tail=120 -f nosu groups trending postgres ingress controller ditto-relay ditto-sync opensearch ;;
   stop) compose stop ;;
   restart) compose up -d --force-recreate ;;
 esac

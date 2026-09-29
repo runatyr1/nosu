@@ -6,6 +6,7 @@ x-app-build: &app-build
   args:
     NEXT_PUBLIC_APP_URL: ${NOSU_PUBLIC_URL:?set NOSU_PUBLIC_URL in infra/.env}
     NEXT_PUBLIC_GROUPS_APP_URL: /groups-app/
+    NEXT_PUBLIC_LOCAL_RELAY_ONLY: ${NEXT_PUBLIC_LOCAL_RELAY_ONLY:-false}
 
 x-log-options: &log-options
   syslog-address: udp://127.0.0.1:5514
@@ -126,8 +127,8 @@ services:
         tag: ditto-relay
     environment:
       PORT: '13131'
-      RELAY_URL: ws://localhost:13131/
-      PUBLIC_URL: http://localhost:13131/
+      RELAY_URL: ${DITTO_RELAY_URL:-ws://localhost/relay}
+      PUBLIC_URL: ${NOSU_PUBLIC_URL:?set NOSU_PUBLIC_URL in infra/.env}/relay
       NOSTR_SECRET_KEY: ${DITTO_NSEC:-}
       OPENSEARCH_NODE: http://opensearch:9200
       PROTOCOL_WORKERS: '1'
@@ -135,6 +136,32 @@ services:
       - '127.0.0.1:13131:13131'
     depends_on:
       opensearch:
+        condition: service_healthy
+    restart: unless-stopped
+
+  ditto-sync:
+    image: nosu-ditto-relay:local
+    command: [bun, scripts/sync.ts]
+    logging:
+      driver: syslog
+      options:
+        <<: *log-options
+        tag: ditto-sync
+    environment:
+      PORT: '13132'
+      SYNC_CONFIG: /config/sync.json
+      SYNC_STATE_DIR: /data
+      SYNC_PUBLIC_URL: ${NOSU_PUBLIC_URL:?set NOSU_PUBLIC_URL in infra/.env}/relay-sync/session
+      SYNC_CLIENT_ORIGIN: ${NOSU_PUBLIC_URL:?set NOSU_PUBLIC_URL in infra/.env}
+      RELAY_URL: ${DITTO_RELAY_URL:-ws://localhost/relay}
+      NOSTR_SECRET_KEY: ${DITTO_NSEC:-}
+      OPENSEARCH_NODE: http://opensearch:9200
+      STATS_ENABLED: 'false'
+    volumes:
+      - ./ditto-sync.json:/config/sync.json:ro
+      - sync-data:/data
+    depends_on:
+      ditto-relay:
         condition: service_healthy
     restart: unless-stopped
 
@@ -203,3 +230,4 @@ volumes:
   caddy-data:
   caddy-config:
   opensearch-data:
+  sync-data:

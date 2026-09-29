@@ -44,6 +44,7 @@ import { RightRail } from "./RightRail";
 import { ComposeModal } from "./ComposeModal";
 import { FxCanvas } from "./FxCanvas";
 import { sessionPubkey, useSession } from "./SessionProvider";
+import { useRelaySync } from "../lib/relay-sync";
 
 /** The app frame: navigation, the reading column, and the sidebar beside. */
 /** Routes that give up the right rail and take the full width. */
@@ -80,6 +81,7 @@ export function AppShell({
   /** Private messages sync for the whole app, not just the Chat screen. */
   const queryClient = useQueryClient();
   const { session: chatSession, accounts } = useSession();
+  const relaySync = useRelaySync(chatSession.status === "signed" ? chatSession.signer : undefined);
   /* Signs in from the phone's keychain when this page IS the native app. */
   useNativeShellSession();
   useNativeShellApprovals();
@@ -167,6 +169,15 @@ export function AppShell({
 
   return (
     <>
+      {(pathname.startsWith('/chat') || pathname.startsWith('/settings')) && relaySync.status.state !== 'disabled' && (
+        <div role="status" className="fixed bottom-2 right-2 z-50 max-w-sm rounded-lg border border-border bg-background px-3 py-2 text-xs text-muted-foreground shadow-sm">
+          {relaySync.status.state === 'connecting' ? 'Authorizing private relay sync…' : relaySync.status.message}
+          {relaySync.status.state === 'error' && <button type="button" onClick={relaySync.retry} className="ml-2 underline">Retry</button>}
+        </div>
+      )}
+      {pathname.startsWith('/chat') && process.env.NEXT_PUBLIC_LOCAL_RELAY_ONLY === 'true' && (
+        <div className="px-4 py-2 text-sm text-muted-foreground">Messages use this instance’s relay. Delivery to other clients depends on them reading the sync peer.</div>
+      )}
       {/* The pages the reader has not opened yet, warmed once this one is idle. */}
       <Prefetch pubkey={chatPubkey} />
 

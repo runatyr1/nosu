@@ -80,7 +80,7 @@
   <div class="actions"><button id="sync-pause" data-action="pause">Pause</button><button id="sync-resume" data-action="resume">Resume</button><button id="sync-backfill" data-action="backfill">Backfill previous hour</button><button id="sync-retry" data-action="retry">Retry</button><label class="toggle"><input id="sync-live" type="checkbox" checked> Live mode</label></div>
   <p id="sync-state" role="status">Checking synchronization…</p>
   <p id="sync-error" class="bad" role="alert"></p>
-  <p class="muted">Live uses its own peer connection. Live catch-up and backfill share another connection, but their jobs and event counts are separate. Accepted transfers may include duplicates. Combined traffic includes private sync and protocol messages. Counters reset when the worker restarts.</p>
+  <p class="muted">Live uses its own peer connection. Live catch-up and backfill share a failover peer for both NIP-77 comparison and event downloads. Each completed window covers its selected peer, not all peers. Accepted transfers may include duplicates. Combined traffic includes private sync and protocol messages. Counters reset when the worker restarts.</p>
   <div class="sync-grid">
     <article class="sync-sections"><h2>Synchronization</h2>
       <section><h3>Live</h3><dl id="sync-live-metrics"></dl></section>
@@ -197,31 +197,33 @@
       if(data.lastError&&!errors.some(message=>message.endsWith(data.lastError)))errors.push(`Other sync: ${data.lastError}`);
       document.querySelector('#sync-error').textContent=errors.join(' · ');
       fields('#sync-live-metrics',[
-        ['Status',data.live?.state||'Unavailable'],['Incoming queue',metric(data.live?.queue)],['Queue bytes',metric(data.live?.queueBytes,' bytes')],
+        ['Status',data.live?.state||'Unavailable'],['Selected relay',data.live?.peer||'Unavailable'],['Incoming queue',metric(data.live?.queue)],['Queue bytes',metric(data.live?.queueBytes,' bytes')],
         ['Events received',metric(data.live?.received)],['Received events / second',metric(data.live?.receivedEventsPerSecond)],['Events accepted locally',metric(data.live?.accepted)],['Accepted events / second',metric(data.live?.eventsPerSecond)],
         ['Received traffic / second',metric(data.live?.bytesPerSecond,' B/s')],['Received traffic',metric(data.live?.receivedBytes,' bytes')],
         ['Rejected import attempts',metric(data.live?.rejected)],['Queue overflows',metric(data.live?.overflows)],['Subscriptions opened',metric(data.live?.subscriptions)],
         ['Last recovery',dateLabel(data.live?.recoveredAt)],
       ]);
       fields('#sync-catchup-metrics',[
-        ['Status',data.catchup?.state||'Unavailable'],['Peer connection',data.connected?.peer?'Connected':'Disconnected'],
+        ['Status',data.catchup?.state||'Unavailable'],['Selected relay',data.catchup?.peer||'Unavailable'],['Peer connection',data.connected?.peer?'Connected':'Disconnected'],
         ['Active window',data.catchup?.activeWindow?`${dateLabel(data.catchup.activeWindow.since)} → ${dateLabel(data.catchup.activeWindow.until)}`:'None'],
-        ['Queued windows',metric(data.catchup?.pendingWindows)],['Latest covered',dateLabel(data.catchup?.latestCovered)],
-        ['Reconciliation attempts',metric(data.catchup?.reconciliations)],['IDs identified',metric(data.catchup?.identified)],['IDs remaining',metric(data.catchup?.remaining)],
+        ['Queued windows',metric(data.catchup?.pendingWindows)],['Latest covered',dateLabel(data.catchup?.latestCovered)],['Last coverage relay',data.lastCoveragePeer||'None'],
+        ['NIP-77 attempts',metric(data.catchup?.reconciliations)],['NIP-77 refusals',metric(data.catchup?.nip77Refusals)],['Last successful NIP-77',dateLabel(data.catchup?.nip77LastSuccessAt)],['Last NIP-77 failure',data.catchup?.nip77LastFailure||'None'],['NIP-77 failure time',dateLabel(data.catchup?.nip77LastFailureAt)],['Next retry',data.catchup?.nextRetryAt?dateLabel(data.catchup.nextRetryAt):'None scheduled'],
+        ['IDs identified',metric(data.catchup?.identified)],['IDs remaining',metric(data.catchup?.remaining)],
         ['Download requests',metric(data.catchup?.queries)],['Outstanding download requests',metric(data.catchup?.pendingRequests)],
         ['Events accepted locally',metric(data.catchup?.accepted)],['Accepted events / second',metric(data.catchup?.eventsPerSecond)],
         ['Rejected import attempts',metric(data.catchup?.rejected)],['Unavailable after retry',metric(data.catchup?.unavailable)],
       ]);
       fields('#sync-backfill-metrics',[
-        ['Status',data.backfill?.state||'Unavailable'],['Active window',data.backfill?.activeWindow?`${dateLabel(data.backfill.activeWindow.since)} → ${dateLabel(data.backfill.activeWindow.until)}`:'None'],
+        ['Status',data.backfill?.state||'Unavailable'],['Selected relay',data.backfill?.peer||'Unavailable'],['Active window',data.backfill?.activeWindow?`${dateLabel(data.backfill.activeWindow.since)} → ${dateLabel(data.backfill.activeWindow.until)}`:'None'],
         ['Queued windows',metric(data.backfill?.pendingWindows)],['Completed ranges',metric(data.backfill?.completedWindows?.length)],
-        ['Reconciliation attempts',metric(data.backfill?.reconciliations)],['IDs identified',metric(data.backfill?.identified)],['IDs remaining',metric(data.backfill?.remaining)],
+        ['NIP-77 attempts',metric(data.backfill?.reconciliations)],['NIP-77 refusals',metric(data.backfill?.nip77Refusals)],['Last successful NIP-77',dateLabel(data.backfill?.nip77LastSuccessAt)],['Last NIP-77 failure',data.backfill?.nip77LastFailure||'None'],['NIP-77 failure time',dateLabel(data.backfill?.nip77LastFailureAt)],['Next retry',data.backfill?.nextRetryAt?dateLabel(data.backfill.nextRetryAt):'None scheduled'],
+        ['IDs identified',metric(data.backfill?.identified)],['IDs remaining',metric(data.backfill?.remaining)],
         ['Download requests',metric(data.backfill?.queries)],['Outstanding download requests',metric(data.backfill?.pendingRequests)],
         ['Events accepted locally',metric(data.backfill?.accepted)],['Accepted events / second',metric(data.backfill?.eventsPerSecond)],
         ['Rejected import attempts',metric(data.backfill?.rejected)],['Unavailable after retry',metric(data.backfill?.unavailable)],
       ]);
       fields('#sync-coverage',[
-        ['Public peer',data.peer||'Unavailable'],['Peer connection',data.connected?.peer?'Connected':'Disconnected'],['Local connection',data.connected?.local?'Connected':'Disconnected'],
+        ['Outbound/private relay',data.limits?.peers?.[0]||'Unavailable'],['Local connection',data.connected?.local?'Connected':'Disconnected'],
         ['Public upload queue',metric(data.queues?.uploads)],['Public upload queue bytes',metric(data.queueBytes?.uploads,' bytes')],
         ['Private sessions',metric(data.sessions?.active)],['Private histories syncing',metric(data.sessions?.syncing)],['Private histories completed',metric(data.sessions?.completed)],
         ['Private histories failed',metric(data.sessions?.failed)],['Last activity',dateLabel(data.lastActivity)],

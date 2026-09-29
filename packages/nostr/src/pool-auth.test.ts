@@ -47,4 +47,60 @@ describe('pool NIP-42 authentication', () => {
     expect(h.underlying.close).toHaveBeenCalledWith(['wss://relay.example'])
     h.pool.close()
   })
+  it('revives an auth-refused live inbox when a signer becomes available', async () => {
+    const h = harness()
+    h.pool.setAuthSigner(undefined)
+    let authenticated = false
+    const received = vi.fn()
+    h.relay.auth = vi.fn(async sign => {
+      await sign({ kind: 22242, created_at: 1, content: '', tags: [['relay', h.relay.url], ['challenge', 'abc']] })
+      authenticated = true
+    })
+    h.relay.subscribe = vi.fn((_filters, params) => {
+      queueMicrotask(() => authenticated
+        ? params.onevent?.({ id: 'inbox-event' } as NostrEvent)
+        : params.onclose?.('auth-required: sign in'))
+      return { close() {} }
+    })
+    h.pool.subscribe({ live: true, filters: [{ kinds: [1059], '#p': ['pk'] }], onEvent: received })
+    await new Promise(resolve => setTimeout(resolve, 10))
+    expect(received).not.toHaveBeenCalled()
+    h.pool.setAuthSigner(h.signer)
+    await vi.waitFor(() => expect(received).toHaveBeenCalledTimes(1))
+    expect(h.relay.auth).toHaveBeenCalledTimes(1)
+    h.pool.close()
+  })
+  it('reconnects immediately on account change and ignores old socket callbacks', async () => {
+    const h = harness()
+    const attachments: UnderlyingSubscribeParams[] = []
+    const received = vi.fn()
+    h.relay.subscribe = vi.fn((_filters, params) => {
+      attachments.push(params)
+      return { close() {} }
+    })
+    h.pool.subscribe({ live: true, filters: [{ kinds: [1059] }], onEvent: received })
+    await vi.waitFor(() => expect(attachments).toHaveLength(1))
+    h.underlying.close.mockImplementation(() => attachments[0]?.onclose?.('auth-required: old connection'))
+    h.pool.setAuthSigner({ ...h.signer } as Signer)
+    await vi.waitFor(() => expect(attachments).toHaveLength(2), { timeout: 500 })
+    attachments[0]?.onevent?.({ id: 'old-account' } as NostrEvent)
+    attachments[0]?.onclose?.('auth-required: late old connection')
+    attachments[1]?.onevent?.({ id: 'new-account' } as NostrEvent)
+    expect(received).toHaveBeenCalledTimes(1)
+    expect(received.mock.calls[0]?.[0].id).toBe('new-account')
+    h.pool.close()
+  })
+  it('does not revive blocked subscriptions when the signer changes', async () => {
+    const h = harness()
+    h.relay.subscribe = vi.fn((_filters, params) => {
+      queueMicrotask(() => params.onclose?.('blocked: operator policy'))
+      return { close() {} }
+    })
+    h.pool.subscribe({ live: true, filters: [{ kinds: [1059] }], onEvent() {} })
+    await new Promise(resolve => setTimeout(resolve, 10))
+    h.pool.setAuthSigner({ ...h.signer } as Signer)
+    await new Promise(resolve => setTimeout(resolve, 10))
+    expect(h.relay.subscribe).toHaveBeenCalledTimes(1)
+    h.pool.close()
+  })
 })

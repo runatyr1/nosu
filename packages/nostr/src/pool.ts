@@ -16,7 +16,7 @@ import type {
   SubscriptionHandle,
   QueryOptions,
 } from './types'
-import { isPermanentRefusal } from './closed-reason'
+import { closedReasonPrefix, isPermanentRefusal } from './closed-reason'
 import {
   DEFAULT_RELAY_ENTRIES,
   normalizeRelayUrls,
@@ -149,6 +149,10 @@ interface RelayRecord {
 /** One subscription's attachment to one relay. */
 interface RelayLeg {
   authRetried?: boolean
+  /** An auth refusal can be retried when the active signer changes. */
+  authBlocked?: boolean
+  /** Ignore callbacks and connection attempts from a previous attachment. */
+  generation?: number
   readonly url: RelayUrl
   sub?: UnderlyingSubscription
   eosed: boolean
@@ -569,6 +573,8 @@ export class NostrichPool implements Pool {
 
   private async attach(sub: PoolSubscription, leg: RelayLeg): Promise<void> {
     if (sub.closed || this.disposed || leg.detached) return
+    const generation = leg.generation = (leg.generation ?? 0) + 1
+    const current = (): boolean => !sub.closed && !this.disposed && !leg.detached && leg.generation === generation
     const record = this.ensureRecord(leg.url)
     // Before the socket is awaited, not after: a dozen legs all waiting on the same.
     if (!this.admit(sub, leg, record)) return
@@ -578,6 +584,7 @@ export class NostrichPool implements Pool {
     try {
       relay = await this.underlying.ensureRelay(leg.url, { connectionTimeout: this.connectTimeoutMs })
     } catch (err) {
+      if (!current()) return
       record.status.state = 'failed'
       record.status.error = messageOf(err)
       this.legEosed(sub, leg)
@@ -586,10 +593,7 @@ export class NostrichPool implements Pool {
       this.scheduleReattach(sub, leg)
       return
     }
-    if (sub.closed || this.disposed || leg.detached) {
-      this.release(leg)
-      return
-    }
+    if (!current()) return
 
     record.status.state = 'open'
     record.status.error = undefined
@@ -599,19 +603,21 @@ export class NostrichPool implements Pool {
 
     try {
       leg.sub = relay.subscribe(sub.params.filters, {
-        onevent: event => this.deliver(sub, leg, event),
+        onevent: event => { if (current()) this.deliver(sub, leg, event) },
         oneose: () => {
+          if (!current()) return
           record.status.latencyMs = Math.max(0, this.now() - leg.sentAt)
           // Here and nowhere else.
           sub.params.onRelayEose?.(leg.url)
           this.legEosed(sub, leg)
         },
         onclose: reason => {
+          if (!current()) return
           if (reason.startsWith('auth-required:') && !leg.authRetried && this.authSigner && relay.auth) {
             leg.authRetried = true
             void this.authenticate(relay).then(() => {
-              if (!sub.closed && !leg.detached && !this.disposed) void this.attach(sub, leg)
-            }, () => this.legClosed(sub, leg, reason))
+              if (current()) void this.attach(sub, leg)
+            }, () => { if (current()) this.legClosed(sub, leg, reason) })
           } else this.legClosed(sub, leg, reason)
         },
         // Lets the relay skip signature verification for events this subscription already.
@@ -619,6 +625,7 @@ export class NostrichPool implements Pool {
         eoseTimeout: this.eoseTimeoutMs,
       })
     } catch (err) {
+      if (!current()) return
       record.status.state = 'failed'
       record.status.error = messageOf(err)
       this.legEosed(sub, leg)
@@ -675,6 +682,7 @@ export class NostrichPool implements Pool {
 
     /** A refusal ends this leg. */
     if (isPermanentRefusal(reason)) {
+      leg.authBlocked = closedReasonPrefix(reason) === 'auth-required'
       leg.detached = true
       return
     }
@@ -793,16 +801,35 @@ export class NostrichPool implements Pool {
 
   /** Disconnect authenticated sockets when the active identity changes. */
   setAuthSigner(signer?: Signer): void {
-    if (this.authSigner === signer) return
+    if (this.disposed || this.authSigner === signer) return
     this.authSigner = signer
     this.authRequests.clear()
-    this.underlying.close([...this.records.keys()])
+    const reconnect: Array<{ sub: PoolSubscription; leg: RelayLeg }> = []
     for (const sub of this.subs) {
       for (const leg of sub.legs.values()) {
+        // Invalidate old socket callbacks before closing it: its CLOSED frame
+        // must not detach the new account's subscription.
+        leg.generation = (leg.generation ?? 0) + 1
+        if (leg.reconnectTimer !== undefined) clearTimeout(leg.reconnectTimer)
+        leg.reconnectTimer = undefined
         leg.authRetried = false
         leg.sub = undefined
-        if (!leg.detached) this.scheduleReattach(sub, leg)
+        if (signer && leg.authBlocked) {
+          leg.detached = false
+          leg.authBlocked = false
+        }
+        if (!leg.detached) reconnect.push({ sub, leg })
       }
+    }
+    for (const record of this.records.values()) {
+      record.failures = 0
+      record.nextAttemptAt = 0
+    }
+    this.underlying.close([...this.records.keys()])
+    // Changing identity is deliberate, so reconnect without outage backoff.
+    for (const { sub, leg } of reconnect) {
+      this.startEoseClock(sub, leg)
+      void this.attach(sub, leg)
     }
   }
 

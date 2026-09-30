@@ -209,7 +209,7 @@
         ['Events received',metric(data.live?.received)],['Received events / second',metric(data.live?.receivedEventsPerSecond)],['Events accepted locally',metric(data.live?.accepted)],['Accepted events / second',metric(data.live?.eventsPerSecond)],
         ['Received traffic / second',metric(data.live?.bytesPerSecond,' B/s')],['Received traffic',metric(data.live?.receivedBytes,' bytes')],
         ['Rejected import attempts',metric(data.live?.rejected)],['Queue overflows',metric(data.live?.overflows)],['Subscriptions opened',metric(data.live?.subscriptions)],
-        ['Last recovery',dateLabel(data.live?.recoveredAt)],
+        ['Quiet-stream probes',metric(data.live?.probes)],['Stale streams detected',metric(data.live?.staleDetections)],['Last quiet-stream probe',dateLabel(data.live?.lastProbeAt)],['Last recovery',dateLabel(data.live?.recoveredAt)],
       ]);
       fields('#sync-catchup-metrics',[
         ['Status',data.catchup?.state||'Unavailable'],['Selected relay',data.catchup?.peer||'Unavailable'],['Peer connection',data.connected?.peer?'Connected':'Disconnected'],

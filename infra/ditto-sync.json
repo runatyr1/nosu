@@ -1,6 +1,6 @@
 {
   "localRelay": "ws://ditto-relay:13131/",
-  "peers": ["wss://relay.ditto.pub/", "wss://relay.dreamith.to/"],
+  "priorityProbeIntervalMs": 60000,
   "batchSize": 25,
   "requestIntervalMs": 1000,
   "uploadIntervalMs": 1000,

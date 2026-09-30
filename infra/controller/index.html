@@ -86,7 +86,7 @@
   <div class="actions"><button id="sync-pause" data-action="pause">Pause</button><button id="sync-resume" data-action="resume">Resume</button><button id="sync-backfill" data-action="backfill">Backfill previous hour</button><button id="sync-retry" data-action="retry">Retry</button><label class="toggle"><input id="sync-live" type="checkbox" checked> Live mode</label></div>
   <p id="sync-state" role="status">Checking synchronization…</p>
   <p id="sync-error" class="bad" role="alert"></p>
-  <p class="muted">Live uses its own peer connection. Live catch-up and backfill share a failover peer for both NIP-77 comparison and event downloads. Each completed window covers its selected peer, not all peers. Accepted transfers may include duplicates. Combined traffic includes private sync and protocol messages. Counters reset when the worker restarts.</p>
+  <p class="muted">Live and live catch-up use separate priority lists. A failed connection falls back to the next relay; while on a fallback, higher-priority relays are checked about once a minute. Catch-up and backfill switch only between windows, keeping NIP-77 comparison and downloads on one peer. Each completed window covers its selected peer, not all peers. Combined traffic includes private sync and protocol messages. Counters reset when the worker restarts.</p>
   <div class="sync-grid">
     <details class="sync-card"><summary>Live<span class="sync-preview" id="sync-live-preview"></span></summary><dl id="sync-live-metrics"></dl></details>
     <details class="sync-card"><summary>Live catch-up<span class="sync-preview" id="sync-catchup-preview"></span></summary><dl id="sync-catchup-metrics"></dl></details>
@@ -205,7 +205,7 @@
       if(data.lastError&&!errors.some(message=>message.endsWith(data.lastError)))errors.push(`Other sync: ${data.lastError}`);
       document.querySelector('#sync-error').textContent=errors.join(' · ');
       fields('#sync-live-metrics',[
-        ['Status',data.live?.state||'Unavailable'],['Selected relay',data.live?.peer||'Unavailable'],['Incoming queue',metric(data.live?.queue)],['Queue bytes',metric(data.live?.queueBytes,' bytes')],
+        ['Status',data.live?.state||'Unavailable'],['Selected relay',data.live?.peer||'Unavailable'],['Next priority check',data.live?.nextPriorityProbeAt?dateLabel(data.live.nextPriorityProbeAt):'Primary active'],['Incoming queue',metric(data.live?.queue)],['Queue bytes',metric(data.live?.queueBytes,' bytes')],
         ['Events received',metric(data.live?.received)],['Received events / second',metric(data.live?.receivedEventsPerSecond)],['Events accepted locally',metric(data.live?.accepted)],['Accepted events / second',metric(data.live?.eventsPerSecond)],
         ['Received traffic / second',metric(data.live?.bytesPerSecond,' B/s')],['Received traffic',metric(data.live?.receivedBytes,' bytes')],
         ['Rejected import attempts',metric(data.live?.rejected)],['Queue overflows',metric(data.live?.overflows)],['Subscriptions opened',metric(data.live?.subscriptions)],
@@ -214,7 +214,7 @@
       fields('#sync-catchup-metrics',[
         ['Status',data.catchup?.state||'Unavailable'],['Selected relay',data.catchup?.peer||'Unavailable'],['Peer connection',data.connected?.peer?'Connected':'Disconnected'],
         ['Active window',data.catchup?.activeWindow?`${dateLabel(data.catchup.activeWindow.since)} → ${dateLabel(data.catchup.activeWindow.until)}`:'None'],
-        ['Queued windows',metric(data.catchup?.pendingWindows)],['Latest covered',dateLabel(data.catchup?.latestCovered)],['Last coverage relay',data.lastCoveragePeer||'None'],
+        ['Queued windows',metric(data.catchup?.pendingWindows)],['Latest covered',dateLabel(data.catchup?.latestCovered)],['Last coverage relay',data.lastCoveragePeer||'None'],['Next priority check',data.nextPublicPriorityProbeAt?dateLabel(data.nextPublicPriorityProbeAt):'Primary active'],
         ['NIP-77 attempts',metric(data.catchup?.reconciliations)],['NIP-77 refusals',metric(data.catchup?.nip77Refusals)],['Last successful NIP-77',dateLabel(data.catchup?.nip77LastSuccessAt)],['Last NIP-77 failure',data.catchup?.nip77LastFailure||'None'],['NIP-77 failure time',dateLabel(data.catchup?.nip77LastFailureAt)],['Next retry',data.catchup?.nextRetryAt?dateLabel(data.catchup.nextRetryAt):'None scheduled'],
         ['IDs identified',metric(data.catchup?.identified)],['IDs remaining',metric(data.catchup?.remaining)],
         ['Download requests',metric(data.catchup?.queries)],['Outstanding download requests',metric(data.catchup?.pendingRequests)],

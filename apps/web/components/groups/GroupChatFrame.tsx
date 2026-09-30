@@ -54,10 +54,12 @@ export function GroupChatFrame(): React.ReactNode {
       : ''
   const query = searchParams.toString()
   const hash = typeof window === 'undefined' ? '' : window.location.hash
-  const requestedChildPath = `/${nestedPath}${query ? `?${query}` : ''}${hash}`
+  const childPath = nestedPath || (session.status === 'signed' ? 'dm' : '')
+  const requestedChildPath = `/${childPath}${query ? `?${query}` : ''}${hash}`
   // The src is only the iframe's boot address. Later outer-route changes are
   // bridged with postMessage so this persistent frame never reloads.
   const initialPath = useRef({ nestedPath, query, hash })
+  const initialNavigationSent = useRef(false)
 
   useEffect(() => {
     bridgeLog('frame:mount', { path: window.location.pathname })
@@ -74,15 +76,20 @@ export function GroupChatFrame(): React.ReactNode {
   }, [ready, session])
 
   const src = useMemo(() => {
-    if (!baseUrl) return undefined
+    if (!baseUrl || !ready) return undefined
     const url = new URL(baseUrl, window.location.href)
     if (initialPath.current.nestedPath) {
       url.pathname = `${url.pathname.replace(/\/$/, '')}/${initialPath.current.nestedPath}`
+    } else if (session.status === 'signed') {
+      // Boot a signed-in iframe at a real route. Armada's root redirect can
+      // race the host session adoption after an outer account switch, leaving
+      // only its headless providers mounted until the frame is reloaded.
+      url.pathname = `${url.pathname.replace(/\/$/, '')}/dm`
     }
     url.search = initialPath.current.query
     url.hash = initialPath.current.hash
     return url.toString()
-  }, [baseUrl])
+  }, [baseUrl, ready, session.status])
 
   const postSession = useCallback(() => {
     if (!src || !frame.current?.contentWindow) return
@@ -210,6 +217,12 @@ export function GroupChatFrame(): React.ReactNode {
 
   useEffect(() => {
     if (!src || !frame.current?.contentWindow) return
+    // The iframe's boot URL already contains the initial route. Sending that
+    // route again can race Armada's own root redirect after an account switch.
+    if (!initialNavigationSent.current) {
+      initialNavigationSent.current = true
+      return
+    }
     const message: GroupsBridgeNavigate = {
       protocol: GROUPS_BRIDGE_PROTOCOL,
       type: 'navigate',

@@ -16,6 +16,10 @@
         respond "Not found" 404
     }
 
+    handle /groups-app {
+        redir * /groups-app/ 308
+    }
+
     handle /groups-app/* {
         reverse_proxy groups:80
     }

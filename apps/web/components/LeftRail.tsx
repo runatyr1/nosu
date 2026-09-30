@@ -23,9 +23,6 @@ import { homePressIntent } from '../lib/home-tap'
 import { revealUnread, useUnread } from '../lib/unread'
 import { useAccountAlerts, useAnyAccountAlerts } from '../lib/account-alerts'
 import { useNotificationsUnread, useZapsUnread } from '../lib/notifications'
-import { useUnreadChatWraps } from '../lib/chat-alerts'
-import { useInboxSplit } from '../lib/chat-inbox'
-import { useChat } from '../lib/chat'
 import { Avatar } from './Avatar'
 import { VerifiedBadge } from './VerifiedBadge'
 import { MAX_ACCOUNTS, sessionPubkey, useSession } from './SessionProvider'
@@ -53,11 +50,9 @@ interface NavItem {
 export const NAV_ITEMS: NavItem[] = [
   { href: '/', label: 'Home', icon: 'home' },
   { href: '/explore', label: 'Explore', icon: 'search', svg: 'M10.5 17.5a7 7 0 1 1 0-14 7 7 0 0 1 0 14zM21 21l-5.5-5.5' },
-  { href: '/groups', label: 'Group Chat', icon: 'forum', auth: true },
+  { href: '/groups', label: 'Messages', icon: 'chat_bubble', svg: CHAT_BUBBLE_PATH, auth: true },
   { href: '/notifications', label: 'Notifications', icon: 'notifications', auth: true },
-  // "Chat", not "Messages" or "DMs".
-  { href: '/chat', label: 'Chat', icon: 'chat_bubble', svg: CHAT_BUBBLE_PATH, auth: true },
-  // `svg` wins over `icon`, as with Explore and Chat: the zap bolt has to be the same.
+  // `svg` wins over `icon`, as with Explore and Messages.
   /* "Wallet", not "Zaps". */
   { href: '/zaps', label: 'Wallet', icon: 'bolt', svg: PATHS.zap, auth: true },
   { href: '/articles', label: 'Articles', icon: 'article' },
@@ -91,13 +86,6 @@ export function LeftRail({ onCompose }: { onCompose: () => void }): React.ReactN
   const hrefOf = (item: NavItem): string => navHref(item, pubkey)
   const unread = useUnread()
   const notificationsUnread = useNotificationsUnread(pubkey)
-  /** Unread chats, from whatever the session has already decrypted. */
-  /** Unread chats. */
-  const chat = useChat(pubkey)
-  const inbox = useInboxSplit(pubkey)
-  const arrivedWraps = useUnreadChatWraps(pubkey)
-  /** The INBOX count, not the total. */
-  const chatUnread = chat.loading ? Math.max(inbox.inboxUnread, arrivedWraps) : inbox.inboxUnread
   const zapsUnread = useZapsUnread(pubkey)
   /** Anywhere under /articles, including the editor itself. */
   const writing = pathname === '/articles' || pathname.startsWith('/articles/')
@@ -171,7 +159,7 @@ export function LeftRail({ onCompose }: { onCompose: () => void }): React.ReactN
                         </svg>
                       )}
                       {/* Offset clear of the glyph. */}
-                      {dotFor(item.href, unread, notificationsUnread, chatUnread, zapsUnread) ? (
+                      {dotFor(item.href, unread, notificationsUnread, zapsUnread) ? (
                         <span
                           aria-hidden="true"
                           /* 3px closer on both axes than it was (-6,-4 → -3,-1). */
@@ -462,7 +450,6 @@ function AccountRow({
   const waiting = [
     alerts.notifications ? 'notifications' : undefined,
     alerts.zaps ? 'zaps' : undefined,
-    alerts.chats ? 'messages' : undefined,
   ].filter((item): item is string => item !== undefined)
   return (
     <button
@@ -515,12 +502,10 @@ function dotFor(
   href: string,
   feed: number,
   notifications: number,
-  chat: number,
   zaps: number,
 ): boolean {
   if (href === '/') return feed > 0
   if (href === '/notifications') return notifications > 0
-  if (href === '/chat') return chat > 0
   // A zap lights this AND notifications: it is both money arriving and somebody.
   if (href === '/zaps') return zaps > 0
   return false

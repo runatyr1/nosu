@@ -43,6 +43,13 @@ export interface GroupsBridgeTheme {
   }
 }
 
+export interface GroupsBridgeDmRelays {
+  protocol: typeof GROUPS_BRIDGE_PROTOCOL
+  type: 'dm-relays'
+  pubkey: string
+  relays: string[]
+}
+
 export interface GroupsBridgeHello {
   protocol: typeof GROUPS_BRIDGE_PROTOCOL
   type: 'hello'

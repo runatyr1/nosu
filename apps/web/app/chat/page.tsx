@@ -1,14 +1,14 @@
 import { Suspense } from 'react'
 
-import { ChatScreen } from '../../components/ChatScreen'
+import { ChatRedirect } from '../../components/ChatRedirect'
 
-export const metadata = { title: 'Chat' }
+export const metadata = { title: 'Messages' }
 
 export default function ChatPage(): React.ReactNode {
-  // useSearchParams needs a Suspense boundary in the App Router: the open conversation.
+  // Preserve existing Chat links while Armada owns the visible inbox.
   return (
     <Suspense fallback={null}>
-      <ChatScreen />
+      <ChatRedirect />
     </Suspense>
   )
 }

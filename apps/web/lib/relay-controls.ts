@@ -1,6 +1,6 @@
 'use client'
 
-import { useSyncExternalStore } from 'react'
+import { useMemo, useSyncExternalStore } from 'react'
 import { DEFAULT_RELAYS, tryNormalizeRelayUrl, type RelayEntry, type RelayUrl } from '@nostrich/nostr'
 import { SERVICE_CONFIG } from '../../../packages/nostr/service-config'
 import { readScoped, writeScoped, onScopedChange } from './scope'
@@ -38,7 +38,7 @@ export function getSavedRelayControls(): RelayControls | null { return parseRela
 const listen = (changed: () => void): (() => void) => onScopedChange(key => { if (key === undefined || key === RELAY_CONTROLS_KEY) changed() })
 export function useSavedRelayControls(): RelayControls | null {
   const raw = useSyncExternalStore(listen, () => readScoped(RELAY_CONTROLS_KEY), () => null)
-  return parseRelayControls(raw)
+  return useMemo(() => parseRelayControls(raw), [raw])
 }
 
 /** Installer defaults seed a preference; they never override a saved account choice. */

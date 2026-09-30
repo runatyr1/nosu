@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 
-import { SERVICE_CONFIG, type EventTemplate } from '@nostrich/nostr'
+import { DEFAULT_DM_RELAYS, SERVICE_CONFIG, type EventTemplate } from '@nostrich/nostr'
 
 import {
   GROUPS_BRIDGE_PROTOCOL,
@@ -13,7 +13,9 @@ import {
   type GroupsBridgeResponse,
   type GroupsBridgeSession,
   type GroupsBridgeTheme,
+  type GroupsBridgeDmRelays,
 } from '../../lib/groups-bridge'
+import { useSavedRelayControls } from '../../lib/relay-controls'
 import { currentTheme, subscribeTheme } from '../../lib/theme'
 import { sessionPubkey, useSession } from '../SessionProvider'
 
@@ -35,9 +37,8 @@ function bridgeLog(event: string, detail: Record<string, unknown> = {}): void {
 }
 
 /**
- * Hosts the source-preserved Armada application and exposes only the active
- * Nosu signer's public NIP-07 surface. Private key material never crosses
- * this boundary.
+ * Hosts Armada and shares the active Nosu signer facade and DM relay choice.
+ * Private key material never crosses this boundary.
  */
 export function GroupChatFrame(): React.ReactNode {
   const frame = useRef<HTMLIFrameElement>(null)
@@ -45,6 +46,7 @@ export function GroupChatFrame(): React.ReactNode {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const { session, ready } = useSession()
+  const relayControls = useSavedRelayControls()
   const [baseUrl, setBaseUrl] = useState<string>()
   const pubkey = sessionPubkey(session)
   const nestedPath = pathname === '/groups'
@@ -107,6 +109,19 @@ export function GroupChatFrame(): React.ReactNode {
     frame.current.contentWindow.postMessage(message, new URL(src).origin)
   }, [pubkey, session, src])
 
+  const postDmRelays = useCallback(() => {
+    if (!src || !frame.current?.contentWindow || !pubkey) return
+    const message: GroupsBridgeDmRelays = {
+      protocol: GROUPS_BRIDGE_PROTOCOL,
+      type: 'dm-relays',
+      pubkey,
+      relays: relayControls
+        ? relayControls.rows.filter(row => row.dms).map(row => row.url)
+        : [...DEFAULT_DM_RELAYS],
+    }
+    frame.current.contentWindow.postMessage(message, new URL(src).origin)
+  }, [pubkey, relayControls, src])
+
   const postTheme = useCallback(() => {
     if (!src || !frame.current?.contentWindow) return
     const root = document.documentElement
@@ -144,6 +159,7 @@ export function GroupChatFrame(): React.ReactNode {
       if (message.type === 'hello') {
         bridgeLog('hello:receive')
         postSession()
+        postDmRelays()
         postTheme()
         return
       }
@@ -206,9 +222,10 @@ export function GroupChatFrame(): React.ReactNode {
 
     window.addEventListener('message', onMessage)
     return () => window.removeEventListener('message', onMessage)
-  }, [postSession, postTheme, router, session, src])
+  }, [postSession, postDmRelays, postTheme, router, session, src])
 
   useEffect(postSession, [postSession])
+  useEffect(postDmRelays, [postDmRelays])
 
   useEffect(() => {
     postTheme()
@@ -236,23 +253,24 @@ export function GroupChatFrame(): React.ReactNode {
   if (session.status !== 'signed') {
     return (
       <section className="mx-auto flex min-h-[60dvh] max-w-lg flex-col justify-center gap-3 p-6 text-center">
-        <h1 className="text-2xl font-bold text-text">Group Chat requires a signer</h1>
+        <h1 className="text-2xl font-bold text-text">Sign in to use Messages</h1>
         <p className="text-text-muted">
           Sign in with a local key, browser signer, or remote signer that supports NIP-44 encryption.
         </p>
       </section>
     )
   }
-  if (!src) return <div className="p-6 text-sm text-text-muted">Loading Group Chat…</div>
+  if (!src) return <div className="p-6 text-sm text-text-muted">Loading Messages…</div>
 
   return (
     <iframe
       ref={frame}
       src={src}
-      title="Nosu Group Chat"
+      title="Nosu Messages"
       onLoad={() => {
         bridgeLog('frame:load', { src })
         postSession()
+        postDmRelays()
         postTheme()
       }}
       onError={() => bridgeLog('frame:error', { src })}

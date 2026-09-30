@@ -3,7 +3,6 @@
 import { useEffect, useRef, useSyncExternalStore } from 'react'
 import { KINDS, MAX_ROOT_PTAGS, NUTZAP_KIND, type Hex, type NostrEvent, type Signer } from '@nostrich/nostr'
 
-import { recordWraps, subscribeChatWraps, unreadChatWraps } from './chat-alerts'
 import { cachedOwnNoteIds, rememberEvent } from './event-cache'
 import { noteNotificationKind } from './note-notifications'
 import { threadMentionsEnabledFor } from './thread-mentions'
@@ -22,7 +21,6 @@ import { NOTIFICATIONS_SEEN_KEY, ZAPS_SEEN_KEY } from './settings-keys'
 
 /** The two kinds our KINDS map predates. */
 const ZAP_RECEIPT = 9735
-const GIFT_WRAP = 1059
 
 /** Where `seen-sync` publishes a reader's read markers. */
 const APP_DATA_KIND = 30078
@@ -38,10 +36,9 @@ export interface WatchedAccount {
 export interface AccountAlerts {
   notifications: boolean
   zaps: boolean
-  chats: boolean
 }
 
-const EMPTY: AccountAlerts = { notifications: false, zaps: false, chats: false }
+const EMPTY: AccountAlerts = { notifications: false, zaps: false }
 
 const flags = new Map<Hex, { notifications: boolean; zaps: boolean }>()
 const listeners = new Set<() => void>()
@@ -54,14 +51,8 @@ function emit(): void {
 
 function subscribe(listener: () => void): () => void {
   listeners.add(listener)
-  /* A wrap arriving has to move OUR version, not just chat-alerts'. */
-  const stop = subscribeChatWraps(() => {
-    version += 1
-    listener()
-  })
   return () => {
     listeners.delete(listener)
-    stop()
   }
 }
 
@@ -89,7 +80,6 @@ export function useAccountAlerts(pubkey: Hex | undefined): AccountAlerts {
   return {
     notifications: held?.notifications ?? false,
     zaps: held?.zaps ?? false,
-    chats: unreadChatWraps(pubkey) > 0,
   }
 }
 
@@ -103,7 +93,7 @@ export function useAnyAccountAlerts(pubkeys: readonly Hex[]): boolean {
   if (typeof window === 'undefined') return false
   return pubkeys.some(pubkey => {
     const held = flags.get(pubkey)
-    return held?.notifications === true || held?.zaps === true || unreadChatWraps(pubkey) > 0
+    return held?.notifications === true || held?.zaps === true
   })
 }
 
@@ -259,8 +249,6 @@ export function useAccountAlertsWatch(others: readonly WatchedAccount[]): void {
         .filter(tag => tag[0] === 'p' && tag[1] !== undefined && watching.includes(tag[1] as Hex))
         .map(tag => tag[1] as Hex)
 
-    const wraps = new Map<Hex, string[]>()
-    let flush: ReturnType<typeof setTimeout> | undefined
     let cancelled = false
 
     /** The notes an event is about: NIP-10 replies and a NIP-18 `q` quote. */
@@ -349,18 +337,6 @@ export function useAccountAlertsWatch(others: readonly WatchedAccount[]): void {
 
     const onEvent = (event: WatchedEvent): void => {
       for (const pubkey of addressees(event.tags)) {
-        if (event.kind === GIFT_WRAP) {
-          // Batched: a relay dumping a backlog fires this hundreds of times, and each one.
-          wraps.set(pubkey, [...(wraps.get(pubkey) ?? []), event.id])
-          if (flush === undefined) {
-            flush = setTimeout(() => {
-              flush = undefined
-              for (const [viewer, ids] of wraps) recordWraps(viewer, ids)
-              wraps.clear()
-            }, 400)
-          }
-          continue
-        }
         // Your own note that happens to tag you, or your own repost of yourself.
         if (event.pubkey === pubkey) continue
 
@@ -427,8 +403,6 @@ export function useAccountAlertsWatch(others: readonly WatchedAccount[]): void {
         { kinds: [KINDS.repost, KINDS.reaction], '#p': watching, since: oldest, limit: 30 },
         // Both ways of being paid, exactly as `zapReceiptFilter` asks for them: a lightning.
         { kinds: [ZAP_RECEIPT, NUTZAP_KIND], '#p': watching, since: oldest, limit: 30 },
-        // No `since` on wraps: NIP-59 randomises their timestamps by up to two days.
-        { kinds: [GIFT_WRAP], '#p': watching, limit: 60 },
       ]
     }
 
@@ -458,7 +432,6 @@ export function useAccountAlertsWatch(others: readonly WatchedAccount[]): void {
 
     return () => {
       cancelled = true
-      if (flush !== undefined) clearTimeout(flush)
       if (resolveTimer !== undefined) clearTimeout(resolveTimer)
       handle.close()
     }

@@ -22,9 +22,8 @@ describe('what the background-account dot subscribes to', () => {
     expect(watch).toContain('event.kind === ZAP_RECEIPT || event.kind === NUTZAP_KIND')
   })
 
-  it('still asks for gift wraps without a window', () => {
-    // NIP-59 randomises wrap timestamps by up to two days, so a `since` drops real mail.
-    expect(watch).toContain("{ kinds: [GIFT_WRAP], '#p': watching, limit: 60 }")
+  it('leaves DM inbox watching to Armada', () => {
+    expect(watch).not.toContain('GIFT_WRAP')
   })
 })
 

@@ -4,7 +4,6 @@ import { use, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'reac
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   eventAddress,
-  conversationKeyOf,
   isPrivateUrl,
   isReply,
   KINDS,
@@ -865,7 +864,7 @@ function ChatButton({ target }: { target: string }): React.ReactNode {
           return
         }
         /** Straight into the conversation with this person. */
-        router.push(`/chat?c=${encodeURIComponent(conversationKeyOf([viewer, target]))}`)
+        router.push(`/groups/dm/${target}`)
       }}
       aria-label="Message"
       title="Message"

@@ -24,15 +24,12 @@ import {
   useNativeShellSession,
   useNativeShellZoomLock,
 } from "../lib/native-shell";
-import { useChat, useChatSync } from "../lib/chat";
 import {
   useLiveNotifications,
   useNotificationsUnread,
   useThinMentionWatch,
   useZapsUnread,
 } from "../lib/notifications";
-import { clearChatWraps, useChatWrapWatch } from "../lib/chat-alerts";
-import { useInboxSplit } from "../lib/chat-inbox";
 import { useMuteSync } from "../lib/mute-sync";
 import { useAccountAlertsWatch } from "../lib/account-alerts";
 import { useSeenSync } from "../lib/seen-sync";
@@ -60,7 +57,7 @@ const COLUMN = {
   aside: "aside-column hidden shrink-0 pt-[17px] min-[1080px]:block w-[350px] ml-[30px]",
 } as const;
 
-const WIDE_ROUTES: readonly string[] = ["/chat", "/groups"];
+const WIDE_ROUTES: readonly string[] = ["/groups"];
 
 export function AppShell({
   children,
@@ -78,7 +75,6 @@ export function AppShell({
   // Starts the scroll watcher for the whole app.
   useChromeAutoHide(hidesChrome(pathname));
 
-  /** Private messages sync for the whole app, not just the Chat screen. */
   const queryClient = useQueryClient();
   const { session: chatSession, accounts } = useSession();
   const relaySync = useRelaySync(chatSession.status === "signed" ? chatSession.signer : undefined);
@@ -108,10 +104,6 @@ export function AppShell({
                 : {}),
             })),
     [accounts, chatPubkey, inShell, shellAccounts],
-  );
-  useChatSync(
-    chatSession.status === "signed" ? chatSession.signer : undefined,
-    chatPubkey,
   );
   // Carries the mute list between devices over NIP-51. Additive and local-first.
   useMuteSync(
@@ -158,18 +150,9 @@ export function AppShell({
     void queryClient.invalidateQueries({ queryKey: ["follows", chatPubkey] });
   }, [chatPubkey, queryClient]);
 
-  /** Gift wraps arriving, counted without opening any. */
-  useChatWrapWatch(chatPubkey);
-
-  /** Once the inbox IS decrypted, its count is the only one that should speak. */
-  const chatLoading = useChat(chatPubkey).loading;
-  useEffect(() => {
-    if (!chatLoading) clearChatWraps(chatPubkey);
-  }, [chatLoading, chatPubkey]);
-
   return (
     <>
-      {(pathname.startsWith('/chat') || pathname.startsWith('/settings')) && relaySync.status.state !== 'disabled' && (
+      {(pathname.startsWith('/groups') || pathname.startsWith('/settings')) && relaySync.status.state !== 'disabled' && (
         <div role="status" className="fixed bottom-2 right-2 z-50 max-w-sm rounded-lg border border-border bg-background px-3 py-2 text-xs text-muted-foreground shadow-sm">
           {relaySync.status.state === 'connecting' ? 'Authorizing private relay sync…' : relaySync.status.message}
           {relaySync.status.state === 'error' && <button type="button" onClick={relaySync.retry} className="ml-2 underline">Retry</button>}
@@ -226,8 +209,6 @@ function BottomBar({ onCompose }: { onCompose: () => void }): React.ReactNode {
   const { session: dotSession } = useSession();
   const dotPubkey = sessionPubkey(dotSession);
   const notificationsUnread = useNotificationsUnread(dotPubkey) > 0;
-  // Inbox only.
-  const chatUnread = useInboxSplit(dotPubkey).inboxUnread > 0;
   /** Zaps, which this row could not light until now. */
   const zapsUnread = useZapsUnread(dotPubkey) > 0;
   const pathname = usePathname();
@@ -236,7 +217,7 @@ function BottomBar({ onCompose }: { onCompose: () => void }): React.ReactNode {
 
   // Explicit order, not NAV_ITEMS order.
   /** Five destinations, and WHICH five is the whole decision. */
-  const MOBILE = ["/", "/explore", "/zaps", "/notifications", "/chat"];
+  const MOBILE = ["/", "/explore", "/zaps", "/notifications", "/groups"];
   const items = MOBILE.map((href) =>
     NAV_ITEMS.find((item) => item.href === href),
   ).filter((item): item is (typeof NAV_ITEMS)[number] => item !== undefined);
@@ -325,7 +306,6 @@ function BottomBar({ onCompose }: { onCompose: () => void }): React.ReactNode {
                 item.href,
                 unreadDot,
                 notificationsUnread,
-                chatUnread,
                 zapsUnread,
               ) ? (
                 <span
@@ -431,12 +411,10 @@ function dotFor(
   href: string,
   feed: boolean,
   notifications: boolean,
-  chat: boolean,
   zaps: boolean,
 ): boolean {
   if (href === "/") return feed;
   if (href === "/notifications") return notifications;
-  if (href === "/chat") return chat;
   // A zap lights this AND notifications: it is both money arriving and somebody.
   if (href === "/zaps") return zaps;
   return false;

@@ -1,44 +1,41 @@
 # Nosu
 
-Nosu is a modular Nostr client combining a social experience with Armada-compatible encrypted group chat.
+Nosu project main goals are: make it easy for new users to deploy and self-host their own decentralised social media, and to integrate separate nostr based components to provide a single, clean client app.
 
-## Clone
+Currently Nosu integrates trending data with postgresql db (trending posts and tags), ditto self-hosted relay with opensearch db (posts and search feature) and armada groups (dms and discord-like group chats). All accesible from the nostrich-based Nosu client. The deployment also provides an infra management dashboard (status, logs, operator options), and a Caddy web gateway.
 
-Clone Nosu with its Armada and Ditto Relay submodules:
+## Install
 
 ```bash
 git clone --recurse-submodules https://github.com/runatyr1/nosu.git
 cd nosu
+sh infra/install.sh --domain nosu.social --local-http
 ```
 
-## Install, update, or uninstall
+Use `--local-http` for a LAN deployment. For a public deployment, omit it and point the domain at the server. On macOS, Colima will be used to start local containers.
+
+The dashboard is local by default at `http://localhost:3401`. To expose it at `/dashboard/` run:
 
 ```bash
-sh infra/install.sh --url http://localhost
+sh infra/install.sh --domain nosu.social --local-http --public-dashboard --pin 6483
 ```
 
-On macOS, the installer detects the host and installs Homebrew, Docker CLI, Compose, and Colima if needed; it starts Colima when no Docker daemon is available and ensures the Colima VM has at least 2 CPUs, 4 GiB memory, and a 20 GiB disk. This macOS path is for local testing. For a public Linux VM, use `--url https://your.domain` on the first install and point DNS at the VM. The installer builds the images locally and starts Nosu, Groups, Trending, PostgreSQL, Ditto Relay, OpenSearch, native relay synchronization, and the web gateway. The local relay is available at `ws://localhost/relay`. After changing source code, rebuild and replace the containers with:
-
-If an existing checkout predates a newly added submodule, the installer initializes all missing submodules automatically.
+## Manage
 
 ```bash
 sh infra/install.sh update
-```
-
-To remove the stack:
-
-```bash
+sh infra/install.sh status
+sh infra/install.sh logs
+sh infra/install.sh restart
 sh infra/uninstall.sh
 ```
 
-The default uninstall keeps data, configuration, and locally built images for a later install. Use `sh infra/uninstall.sh --purge-data` to remove them too. Uninstalling does not stop Colima or remove Docker tooling. Open the local app at `http://localhost` and the deployment overview at `http://localhost:3401`.
+Use `sh infra/uninstall.sh --purge-data` to remove saved data and configuration.
 
-## Relay synchronization
+## Configuration
 
-Configure the peer and transfer limits in [infra/ditto-sync.json](infra/ditto-sync.json). The default peer is `wss://relay.ditto.pub/`: import the previous public hour, then stream live events and reconcile reconnect gaps. Downloads use 25 IDs per batch with a shared one-second request interval; uploads use a one-second event interval. Relay admission and authentication still apply.
+- Relay synchronization: [infra/ditto-sync.json](infra/ditto-sync.json)
+- Kubernetes example: [infra/k8s-example.yaml](infra/k8s-example.yaml)
 
-The controller's `/ditto-relay` page shows progress, queues, rates, failures, and completed coverage. It provides pause/resume, retry, and backfill of the hour before completed coverage. Coverage records processed intervals; rejected or unavailable events are reported separately.
 
-The Relays settings page manages separate Posts (NIP-65) and DMs (NIP-17) selections per account. Save publishes both lists and applies client routing; read/write policies apply only to Posts. `NEXT_PUBLIC_LOCAL_RELAY_ONLY=true` seeds local Posts defaults for accounts without saved settings, rather than overriding their choices. DM copies go directly to each recipient's advertised inbox. The relay's configured synchronization policy remains separate: authenticated sessions copy accessible encrypted user events between the local relay and its peer, regardless of the client's selected destination. Keys and decryption stay in the browser signer; extensions may require their usual signing approvals. Armada, signer, and wallet transports retain their own routes.
-
-The Kubernetes example is [infra/k8s-example.yaml](infra/k8s-example.yaml); native sync deployment there has not been validated.
+Note: This document will be kept very concise, with only the main deployment commands.

@@ -1,7 +1,10 @@
 {$NOSU_SITE_ADDRESS} {
+    import /etc/caddy/tls-routes.caddy
+
     encode zstd gzip
 
-    handle /relay {
+    @relay path /relay /relay/*
+    handle @relay {
         rewrite * /
         reverse_proxy ditto-relay:13131
     }
@@ -24,7 +27,13 @@
         reverse_proxy groups:80
     }
 
+    import /etc/caddy/dashboard-routes.caddy
+
     handle {
         reverse_proxy nosu:3400
     }
+}
+
+:8080 {
+    respond /healthz "ok" 200
 }

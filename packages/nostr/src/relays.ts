@@ -122,7 +122,7 @@ export function normalizeRelayUrl(input: string): RelayUrl {
     // A bare "localhost:7777" is a dev relay, which almost never has TLS.
     if (!hadScheme) protocol = 'ws:'
   } else {
-    // Forcing wss:// off-localhost is not only about transport security: relays.
+    // Public and operator-mapped domains always use TLS.
     protocol = 'wss:'
   }
 

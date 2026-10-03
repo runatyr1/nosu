@@ -202,12 +202,16 @@ services:
       - '443:443/udp'
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${NOSU_TLS_ROUTES:-./tls-public.caddy}:/etc/caddy/tls-routes.caddy:ro
+      - ${NOSU_DASHBOARD_ROUTES:-./dashboard-local.caddy}:/etc/caddy/dashboard-routes.caddy:ro
       - caddy-data:/data
       - caddy-config:/config
     depends_on:
       nosu:
         condition: service_healthy
       groups:
+        condition: service_healthy
+      controller:
         condition: service_healthy
     restart: unless-stopped
 
@@ -216,12 +220,18 @@ services:
     build:
       context: ..
       dockerfile: infra/controller/Dockerfile
+    environment:
+      CONTROLLER_ORIGIN: ${NOSU_PUBLIC_URL:?set NOSU_PUBLIC_URL in infra/.env}
+      CONTROLLER_PIN: ${CONTROLLER_PIN:-}
+      PUBLIC_DASHBOARD: ${PUBLIC_DASHBOARD:-false}
     ports:
       - '127.0.0.1:3401:3401'
       - '127.0.0.1:5514:5514/udp'
-    depends_on:
-      ingress:
-        condition: service_started
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3401/health/live').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
     restart: unless-stopped
 
 volumes:

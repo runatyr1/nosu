@@ -13,7 +13,7 @@ export interface RelayControls { rows: RelayControl[] }
 
 export function localRelayUrl(): RelayUrl | undefined {
   if (typeof window === 'undefined') return undefined
-  const url = new URL(SERVICE_CONFIG.localRelayPath, window.location.origin)
+  const url = new URL(SERVICE_CONFIG.deployment.relayPath, window.location.origin)
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
   return tryNormalizeRelayUrl(url.href)
 }

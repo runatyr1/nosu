@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { KINDS, type Hex, type NostrEvent, type Profile } from '@nostrich/nostr'
+import { KINDS, SERVICE_CONFIG, type Hex, type NostrEvent, type Profile } from '@nostrich/nostr'
 import { toEvent, type ServedNote } from '@nostrich/types'
 
 import { engagementScore } from './engagement'
@@ -9,7 +9,7 @@ import { rememberEvents } from './event-cache'
 import { writeCachedProfile } from './profile-cache'
 
 /** Global trending, served by our own endpoint. */
-const OUR_ENDPOINT = '/api/trending'
+const OUR_ENDPOINT = SERVICE_CONFIG.deployment.trendingPath
 
 /** Free tier is 1 request/second. */
 const TTL_MS = 120_000

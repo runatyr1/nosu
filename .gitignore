@@ -19,6 +19,7 @@ coverage/
 # Local configuration. Keep distributable examples in Git.
 .env*
 !.env.example
+infra/nosu-local-ca.crt
 
 # Operating-system metadata.
 .DS_Store

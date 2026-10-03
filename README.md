@@ -9,15 +9,17 @@ Currently Nosu integrates trending data with postgresql db (trending posts and t
 ```bash
 git clone --recurse-submodules https://github.com/runatyr1/nosu.git
 cd nosu
-sh infra/install.sh --domain nosu.social --local-http
+sh infra/install.sh --domain nosu.social --local
 ```
 
-Use `--local-http` for a LAN deployment. For a public deployment, omit it and point the domain at the server. On macOS, Colima will be used to start local containers.
+Use `--local` for a LAN deployment with Caddy's internal HTTPS certificate. For a public deployment, omit it and point the domain at the server. On macOS, Colima will be used to start local containers.
+
+Local install and update trust the generated CA automatically. On another client device, copy `infra/nosu-local-ca.crt` and run `sh infra/install.sh trust-ca --cert /path/to/nosu-local-ca.crt`.
 
 The dashboard is local by default at `http://localhost:3401`. To expose it at `/dashboard/` run:
 
 ```bash
-sh infra/install.sh --domain nosu.social --local-http --public-dashboard --pin 6483
+sh infra/install.sh --domain nosu.social --local --public-dashboard --pin 6483
 ```
 
 ## Manage

@@ -102,6 +102,7 @@
   const logView=document.querySelector('#log-view');
   const logLines=document.querySelector('#log-lines');
   const syncView=document.querySelector('#sync-view');
+  const dashboardBase=location.pathname.startsWith('/dashboard')?'/dashboard':'';
   let syncBusy=false;
   let controlBusy=false;
   let selectedService='nosu';
@@ -134,7 +135,7 @@
   async function refreshStatus(){
     const updated=document.querySelector('#updated');
     try{
-      const response=await fetch('/api/status',{cache:'no-store'});
+      const response=await fetch(`${dashboardBase}/api/status`,{cache:'no-store'});
       if(!response.ok)throw new Error('Status check failed');
       const data=await response.json();
       for(const [name,state] of Object.entries(data.services)){
@@ -164,7 +165,7 @@
     busyService=service;
     try{
       const after=reset||entries.length===0?'':`?after=${entries[entries.length-1].id}`;
-      const response=await fetch(`/api/logs/${service}${after}`,{cache:'no-store'});
+      const response=await fetch(`${dashboardBase}/api/logs/${service}${after}`,{cache:'no-store'});
       if(!response.ok)throw new Error(`HTTP ${response.status}`);
       const data=await response.json();
       if(service!==selectedService)return;
@@ -198,7 +199,7 @@
   async function refreshSync(){
     if(syncBusy)return;syncBusy=true;
     try{
-      const response=await fetch('/api/ditto-sync',{cache:'no-store'});const data=await response.json();
+      const response=await fetch(`${dashboardBase}/api/ditto-sync`,{cache:'no-store'});const data=await response.json();
       if(!response.ok)throw new Error(data.error||`HTTP ${response.status}`);
       document.querySelector('#sync-state').textContent=`Live: ${data.live?.state||'unknown'} · Live catch-up: ${data.catchup?.state||'unknown'} · Backfill: ${data.backfill?.state||'unknown'} · Checked ${new Date().toLocaleTimeString()}`;
       const errors=[data.live?.error&&`Live: ${data.live.error}`,data.catchup?.lastError&&`Live catch-up: ${data.catchup.lastError}`,data.backfill?.lastError&&`Backfill: ${data.backfill.lastError}`].filter(Boolean);
@@ -262,7 +263,7 @@
     let controlError='';
     const buttons=[...syncView.querySelectorAll('button[data-action]')];buttons.forEach(button=>button.disabled=true);
     try{
-      const response=await fetch('/api/ditto-sync',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})});const data=await response.json();
+      const response=await fetch(`${dashboardBase}/api/ditto-sync`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})});const data=await response.json();
       if(!response.ok)throw new Error(data.error||`HTTP ${response.status}`);
       document.querySelector('#sync-error').textContent='';
     }catch(error){controlError=error.message;}
@@ -271,7 +272,7 @@
   function showPage(path,push=true){
     overview.hidden=path!='/';logView.hidden=path!='/logs';syncView.hidden=path!='/ditto-relay';
     document.querySelector('#overview-button').hidden=!overview.hidden;document.querySelector('#logs-button').hidden=!logView.hidden;document.querySelector('#sync-button').hidden=!syncView.hidden;
-    if(push)history.pushState({},'',path);
+    if(push)history.pushState({},'',`${dashboardBase}${path}`);
     if(!logView.hidden)selectService(selectedService);else if(!syncView.hidden)refreshSync();else{drawConnections();refreshStatus();}
   }
   document.querySelector('#logs-button').addEventListener('click',()=>showPage('/logs'));
@@ -281,7 +282,8 @@
   relayCard.addEventListener('click',()=>showPage('/ditto-relay'));
   relayCard.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();showPage('/ditto-relay');}});
   for(const button of syncView.querySelectorAll('button[data-action]'))button.addEventListener('click',()=>controlSync(button.dataset.action));
-  window.addEventListener('popstate',()=>showPage(location.pathname,false));
+  const currentPage=()=>dashboardBase&&location.pathname.startsWith(`${dashboardBase}/`)?location.pathname.slice(dashboardBase.length):location.pathname;
+  window.addEventListener('popstate',()=>showPage(currentPage(),false));
   document.querySelector('#refresh').addEventListener('click',()=>!syncView.hidden?refreshSync():logView.hidden?refreshStatus():refreshLogs(true));
   document.querySelector('#log-search').addEventListener('input',renderLogs);
   document.querySelector('#log-order').addEventListener('change',renderLogs);
@@ -289,7 +291,7 @@
     try{await navigator.clipboard.writeText(logLines.textContent);document.querySelector('#log-state').textContent='Copied visible logs';}
     catch{document.querySelector('#log-state').textContent='Copy failed';}
   });
-  showPage(location.pathname,false);
+  showPage(currentPage(),false);
   setInterval(()=>{if(!overview.hidden)refreshStatus();},15000);
   setInterval(()=>{if(!logView.hidden&&document.querySelector('#log-live').checked)refreshLogs();},2500);
   setInterval(()=>{if(!syncView.hidden&&document.querySelector('#sync-live').checked)refreshSync();},2500);

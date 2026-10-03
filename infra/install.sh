@@ -5,6 +5,16 @@ ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 CONFIG="$ROOT/infra/.env"
 COMPOSE="$ROOT/infra/compose.yaml"
 ACTION=install
+DOMAIN=
+DOMAIN_PROVIDED=false
+LOCAL_DEPLOYMENT=false
+LOCAL_DEPLOYMENT_PROVIDED=false
+PUBLIC_DASHBOARD=false
+PUBLIC_DASHBOARD_PROVIDED=false
+PIN=
+PIN_PROVIDED=false
+CA_CERT=
+CA_CERT_PROVIDED=false
 PUBLIC_URL=
 COMPOSE_VERSION=v2.39.4
 HOST_OS=$(uname -s)
@@ -17,61 +27,185 @@ die() { say "nosu: $*" >&2; exit 1; }
 
 usage() {
   cat <<'EOF'
-Usage: sh infra/install.sh [install|update|status|logs|stop|restart] [--url http://localhost|https://DOMAIN]
+Usage: sh infra/install.sh [install|update|status|logs|stop|restart] [--domain DOMAIN] [--local] [--public-dashboard --pin DIGITS]
+       sh infra/install.sh trust-ca --cert CERTIFICATE
 
-The first install requires --url. Use http://localhost for local testing.
-For a public deployment, use https://your.domain and point DNS at this host.
+The first install requires --domain. Public installs use HTTPS automatically.
+Use --local for a LAN-only domain; Caddy will issue a locally trusted HTTPS certificate.
+Local install and update trust that certificate automatically on Linux and macOS.
+Use trust-ca on additional client machines after copying the exported certificate.
+The controller is localhost-only by default. --public-dashboard requires --pin and exposes it at /dashboard.
 Update rebuilds local images and recreates containers using the saved configuration.
-Reinstalls reuse the URL saved in infra/.env when --url is omitted.
+Reinstalls reuse the domain saved in infra/.env when --domain is omitted.
 macOS local installs use Homebrew and Colima when Docker is unavailable.
 EOF
 }
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    install|update|status|logs|stop|restart) ACTION=$1 ;;
-    --url) [ "$#" -ge 2 ] || die '--url needs a value'; PUBLIC_URL=$2; shift ;;
+    install|update|status|logs|stop|restart|trust-ca) ACTION=$1 ;;
+    --domain) [ "$#" -ge 2 ] || die '--domain needs a value'; DOMAIN=$2; DOMAIN_PROVIDED=true; shift ;;
+    --local) LOCAL_DEPLOYMENT=true; LOCAL_DEPLOYMENT_PROVIDED=true ;;
+    --public-dashboard) PUBLIC_DASHBOARD=true; PUBLIC_DASHBOARD_PROVIDED=true ;;
+    --pin) [ "$#" -ge 2 ] || die '--pin needs a value'; PIN=$2; PIN_PROVIDED=true; shift ;;
+    --cert) [ "$#" -ge 2 ] || die '--cert needs a value'; CA_CERT=$2; CA_CERT_PROVIDED=true; shift ;;
     --help|-h) usage; exit 0 ;;
     *) die "unknown argument: $1" ;;
   esac
   shift
 done
 
+certificate_fingerprint() {
+  openssl x509 -in "$1" -noout -fingerprint -sha256 | cut -d= -f2 | tr -d ':' | tr '[:lower:]' '[:upper:]'
+}
+
+local_ca_is_trusted() {
+  cert=$1
+  ca_fingerprint=$(certificate_fingerprint "$cert")
+  case "$(uname -s)" in
+    Darwin)
+      security find-certificate -a -Z /Library/Keychains/System.keychain 2>/dev/null | grep -Fq "$ca_fingerprint"
+      ;;
+    Linux)
+      for installed in /usr/local/share/ca-certificates/nosu-local-ca.crt /etc/pki/ca-trust/source/anchors/nosu-local-ca.crt; do
+        [ -r "$installed" ] && [ "$(certificate_fingerprint "$installed")" = "$ca_fingerprint" ] && return 0
+      done
+      return 1
+      ;;
+    *) die 'automatic CA trust supports Linux and macOS' ;;
+  esac
+}
+
+run_privileged() {
+  if [ "$(id -u)" -eq 0 ]; then "$@"; else
+    command -v sudo >/dev/null 2>&1 || die 'sudo is required to trust the local CA'
+    sudo "$@"
+  fi
+}
+
+ensure_linux_certutil() {
+  if command -v certutil >/dev/null 2>&1; then return 0; fi
+  [ -r /etc/os-release ] || return 1
+  . /etc/os-release
+  case "$ID" in
+    debian|ubuntu)
+      say 'Installing Chromium certificate-store support...'
+      run_privileged apt-get -y install libnss3-tools
+      ;;
+    fedora|rhel|rocky|almalinux|centos)
+      say 'Installing Chromium certificate-store support...'
+      run_privileged dnf -y install nss-tools
+      ;;
+    *) return 1 ;;
+  esac
+  command -v certutil >/dev/null 2>&1
+}
+
+trust_linux_browser_ca() {
+  cert=$1
+  nss_db=${HOME:?}/.pki/nssdb
+  [ -d "$nss_db" ] || return 0
+  if ! ensure_linux_certutil; then
+    say 'Could not update the Chromium/Electron certificate store automatically.'
+    say 'Install certutil, then rerun this command.'
+    return 0
+  fi
+  if [ -r "$nss_db/cert9.db" ] && [ ! -e "$nss_db/cert9.db.before-nosu" ]; then
+    cp "$nss_db/cert9.db" "$nss_db/cert9.db.before-nosu"
+  fi
+  certutil -D -d "sql:$nss_db" -n 'Nosu Local CA' >/dev/null 2>&1 || true
+  certutil -A -d "sql:$nss_db" -n 'Nosu Local CA' -t 'C,,' -i "$cert"
+  certutil -V -d "sql:$nss_db" -n 'Nosu Local CA' -u L >/dev/null || \
+    die 'the Nosu local CA could not be verified in the Chromium/Electron certificate store'
+  say 'Nosu local CA is trusted by Chromium/Electron for this user.'
+}
+
+trust_local_ca() {
+  cert=$1
+  [ -r "$cert" ] || die "local CA certificate not found: $cert"
+  command -v openssl >/dev/null 2>&1 || die 'openssl is required to trust the local CA'
+  if local_ca_is_trusted "$cert"; then
+    say 'Nosu local CA is already trusted on this host.'
+  else
+    case "$(uname -s)" in
+      Darwin)
+        run_privileged security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain "$cert"
+        ;;
+      Linux)
+        if command -v update-ca-certificates >/dev/null 2>&1 || [ -x /usr/sbin/update-ca-certificates ]; then
+          run_privileged install -m 0644 "$cert" /usr/local/share/ca-certificates/nosu-local-ca.crt
+          if command -v update-ca-certificates >/dev/null 2>&1; then
+            run_privileged update-ca-certificates
+          else
+            run_privileged /usr/sbin/update-ca-certificates
+          fi
+        elif command -v update-ca-trust >/dev/null 2>&1 || [ -x /usr/bin/update-ca-trust ]; then
+          run_privileged install -m 0644 "$cert" /etc/pki/ca-trust/source/anchors/nosu-local-ca.crt
+          if command -v update-ca-trust >/dev/null 2>&1; then
+            run_privileged update-ca-trust extract
+          else
+            run_privileged /usr/bin/update-ca-trust extract
+          fi
+        else
+          die 'no supported system CA trust command found'
+        fi
+        ;;
+    esac
+  fi
+  local_ca_is_trusted "$cert" || die 'the Nosu local CA was installed but could not be verified'
+  if [ "$(uname -s)" = Linux ]; then trust_linux_browser_ca "$cert"; fi
+  say 'Nosu local CA is now trusted. Restart open browsers before testing.'
+}
+
+if [ "$ACTION" = trust-ca ]; then
+  [ "$CA_CERT_PROVIDED" = true ] || die 'trust-ca requires --cert CERTIFICATE'
+  trust_local_ca "$CA_CERT"
+  exit 0
+fi
+if [ "$CA_CERT_PROVIDED" = true ]; then
+  die '--cert is only valid with trust-ca'
+fi
+
 if [ "$ACTION" != install ] && [ ! -f "$CONFIG" ]; then
   die "missing $CONFIG; run install first"
 fi
-if [ "$ACTION" != install ] && [ -n "$PUBLIC_URL" ]; then
-  die '--url is only valid for install'
+if [ "$ACTION" != install ] && { [ "$DOMAIN_PROVIDED" = true ] || [ "$LOCAL_DEPLOYMENT_PROVIDED" = true ] || [ "$PUBLIC_DASHBOARD_PROVIDED" = true ] || [ "$PIN_PROVIDED" = true ]; }; then
+  die '--domain, --local, --public-dashboard, and --pin are only valid for install'
 fi
 
-validate_url() {
+validate_domain() {
   case "$1" in
-    *[!A-Za-z0-9.:/_-]*|*/*/*/*|*/) die 'URL must be an origin only, without path, query, fragment, or trailing slash' ;;
+    ''|*[!A-Za-z0-9.-]*|.*|*.|*..*) die 'domain must be a hostname without a scheme, path, port, query, or trailing dot' ;;
+    localhost) ;;
+    *.*) ;;
+    *) die 'domain must be localhost or a fully qualified domain name' ;;
   esac
-  authority=${1#*://}
-  case "$authority" in
-    ''|*/*|*:* ) die 'URL must contain only a hostname, without a port' ;;
-  esac
-  case "$1" in
-    http://localhost) SITE_ADDRESS=:80 ;;
-    https://*)
-      case "$authority" in
-        *[!A-Za-z0-9.-]*|.*|*.|*..*|localhost) die 'public URL must be a valid domain name' ;;
-        *.*) ;;
-        *) die 'public URL must be a fully qualified domain name' ;;
-      esac
-      case "$authority" in
-        *[!0-9.]*) ;;
-        *) die 'public URL must be a domain name, not an IP address' ;;
-      esac
-      SITE_ADDRESS=$authority
-      ;;
-    *) die 'use http://localhost for local testing or https://DOMAIN for a public deployment' ;;
-  esac
+  case "$1" in *[!0-9.]*) ;; *) die 'domain must be a hostname, not an IP address' ;; esac
+}
+
+select_origin() {
+  validate_domain "$DOMAIN"
+  [ "$DOMAIN" != localhost ] || LOCAL_DEPLOYMENT=true
+  PUBLIC_URL="https://$DOMAIN"
+  SITE_ADDRESS=$DOMAIN
+  if [ "$LOCAL_DEPLOYMENT" = true ]; then
+    TLS_ROUTES=./tls-internal.caddy
+  else
+    TLS_ROUTES=./tls-public.caddy
+  fi
 }
 
 config_value() {
   sed -n "s/^$1=//p" "$CONFIG" | head -n 1
+}
+
+set_config_value() {
+  key=$1
+  value=$2
+  temp_config=$(mktemp "$ROOT/infra/.env.XXXXXX")
+  awk -v key="$key" -v value="$value" 'BEGIN { found=0 } index($0, key "=")==1 { print key "=" value; found=1; next } { print } END { if (!found) print key "=" value }' "$CONFIG" > "$temp_config"
+  chmod 600 "$temp_config"
+  mv "$temp_config" "$CONFIG"
 }
 
 ensure_submodules() {
@@ -88,18 +222,46 @@ ensure_submodules() {
 if [ "$ACTION" = install ]; then
   if [ -f "$CONFIG" ]; then
     saved_url=$(config_value NOSU_PUBLIC_URL)
-    [ -n "$PUBLIC_URL" ] || PUBLIC_URL=$saved_url
-    validate_url "$PUBLIC_URL"
-    if [ "$HOST_OS" = Darwin ] && [ "$PUBLIC_URL" != http://localhost ]; then
-      die 'macOS installation supports http://localhost only; use a Linux VM for a public deployment'
+    saved_domain=$(config_value NOSU_DOMAIN)
+    [ -n "$saved_domain" ] || saved_domain=${saved_url#*://}
+    if [ "$DOMAIN_PROVIDED" = true ]; then
+      select_origin
+      set_config_value NOSU_DOMAIN "$DOMAIN"
+      set_config_value NOSU_PUBLIC_URL "$PUBLIC_URL"
+      set_config_value NOSU_SITE_ADDRESS "$SITE_ADDRESS"
+      set_config_value NOSU_TLS_ROUTES "$TLS_ROUTES"
+      set_config_value DITTO_RELAY_URL "wss://$DOMAIN/relay"
+    else
+      DOMAIN=$saved_domain
+      if [ "$(config_value NOSU_TLS_ROUTES)" = ./tls-internal.caddy ] || [ "${saved_url#http://}" != "$saved_url" ]; then
+        LOCAL_DEPLOYMENT=true
+      fi
+      select_origin
+      set_config_value NOSU_PUBLIC_URL "$PUBLIC_URL"
+      set_config_value NOSU_SITE_ADDRESS "$SITE_ADDRESS"
+      set_config_value NOSU_TLS_ROUTES "$TLS_ROUTES"
+      set_config_value DITTO_RELAY_URL "wss://$DOMAIN/relay"
     fi
-    [ "$saved_url" = "$PUBLIC_URL" ] || die "existing configuration uses $saved_url; edit infra/.env deliberately before changing the public URL"
+    if [ "$PUBLIC_DASHBOARD_PROVIDED" != true ] && [ "$(config_value PUBLIC_DASHBOARD)" = true ]; then
+      PUBLIC_DASHBOARD=true
+      PIN=$(config_value CONTROLLER_PIN)
+    fi
+    [ -n "$(config_value NOSU_DOMAIN)" ] || set_config_value NOSU_DOMAIN "$DOMAIN"
   else
-    [ -n "$PUBLIC_URL" ] || die 'first install requires --url http://localhost or --url https://your.domain'
-    validate_url "$PUBLIC_URL"
-    if [ "$HOST_OS" = Darwin ] && [ "$PUBLIC_URL" != http://localhost ]; then
-      die 'macOS installation supports http://localhost only; use a Linux VM for a public deployment'
-    fi
+    [ "$DOMAIN_PROVIDED" = true ] || die 'first install requires --domain localhost or --domain your.domain'
+    select_origin
+  fi
+  if [ "$PUBLIC_DASHBOARD" = true ]; then
+    [ "$PIN_PROVIDED" = true ] || [ -n "$PIN" ] || die '--public-dashboard requires --pin'
+    case "$PIN" in *[!0-9]*|'') die 'PIN must contain only digits' ;; esac
+    [ "${#PIN}" -ge 4 ] && [ "${#PIN}" -le 12 ] || die 'PIN must contain 4 to 12 digits'
+  elif [ "$PIN_PROVIDED" = true ]; then
+    die '--pin requires --public-dashboard'
+  fi
+  if [ "$PUBLIC_DASHBOARD_PROVIDED" = true ] && [ -f "$CONFIG" ]; then
+    set_config_value PUBLIC_DASHBOARD true
+    set_config_value CONTROLLER_PIN "$PIN"
+    set_config_value NOSU_DASHBOARD_ROUTES ./dashboard-public.caddy
   fi
   ensure_submodules
   if [ ! -f "$CONFIG" ]; then
@@ -110,7 +272,12 @@ if [ "$ACTION" = install ]; then
     unfurl_secret=$(openssl rand -hex 32)
     cat > "$CONFIG" <<EOF
 NOSU_PUBLIC_URL=$PUBLIC_URL
+NOSU_DOMAIN=$DOMAIN
 NOSU_SITE_ADDRESS=$SITE_ADDRESS
+NOSU_TLS_ROUTES=$TLS_ROUTES
+PUBLIC_DASHBOARD=$PUBLIC_DASHBOARD
+CONTROLLER_PIN=$PIN
+NOSU_DASHBOARD_ROUTES=$(if [ "$PUBLIC_DASHBOARD" = true ]; then printf '%s' ./dashboard-public.caddy; else printf '%s' ./dashboard-local.caddy; fi)
 POSTGRES_PASSWORD=$db_password
 NOSU_DATABASE_URL=postgresql://nostrich:$db_password@postgres:5432/nostrich
 UNFURL_PROXY_SECRET=$unfurl_secret
@@ -119,6 +286,20 @@ VITE_CONCORD_AV_SERVERS=
 EOF
     umask "$old_umask"
     say "Created $CONFIG (mode 600)."
+  fi
+fi
+
+if [ -f "$CONFIG" ]; then
+  saved_url=$(config_value NOSU_PUBLIC_URL)
+  [ -n "$(config_value NOSU_DOMAIN)" ] || set_config_value NOSU_DOMAIN "${saved_url#*://}"
+  [ -n "$(config_value NOSU_TLS_ROUTES)" ] || set_config_value NOSU_TLS_ROUTES ./tls-public.caddy
+  [ -n "$(config_value PUBLIC_DASHBOARD)" ] || set_config_value PUBLIC_DASHBOARD false
+  if [ -z "$(config_value NOSU_DASHBOARD_ROUTES)" ]; then
+    if [ "$(config_value PUBLIC_DASHBOARD)" = true ]; then
+      set_config_value NOSU_DASHBOARD_ROUTES ./dashboard-public.caddy
+    else
+      set_config_value NOSU_DASHBOARD_ROUTES ./dashboard-local.caddy
+    fi
   fi
 fi
 
@@ -344,13 +525,32 @@ compose() {
   fi
 }
 
+export_local_ca() {
+  [ "$(config_value NOSU_TLS_ROUTES)" = ./tls-internal.caddy ] || return 0
+  ca_cert="$ROOT/infra/nosu-local-ca.crt"
+  ca_temp="$ca_cert.tmp"
+  attempts=0
+  while [ "$attempts" -lt 15 ]; do
+    if compose cp ingress:/data/caddy/pki/authorities/local/root.crt "$ca_temp" >/dev/null 2>&1; then
+      chmod 644 "$ca_temp"
+      mv "$ca_temp" "$ca_cert"
+      break
+    fi
+    attempts=$((attempts + 1))
+    sleep 1
+  done
+  [ -r "$ca_cert" ] || die 'Caddy did not make its local CA available'
+  trust_local_ca "$ca_cert"
+  say 'For another client device, copy infra/nosu-local-ca.crt and run:'
+  say '  sh infra/install.sh trust-ca --cert /path/to/nosu-local-ca.crt'
+}
+
 if [ "$ACTION" = install ] || [ "$ACTION" = update ]; then
   if ! grep -q '^DITTO_RELAY_URL=' "$CONFIG"; then
     relay_origin=$(config_value NOSU_PUBLIC_URL)
     case "$relay_origin" in
       https://*) relay_url="wss://${relay_origin#https://}/relay" ;;
-      http://*) relay_url="ws://${relay_origin#http://}/relay" ;;
-      *) die 'NOSU_PUBLIC_URL must be an HTTP origin' ;;
+      *) die 'NOSU_PUBLIC_URL must be an HTTPS origin' ;;
     esac
     printf '\nDITTO_RELAY_URL=%s\n' "$relay_url" >> "$CONFIG"
   fi
@@ -371,15 +571,21 @@ case "$ACTION" in
     compose config --quiet
     compose build nosu groups controller ditto-relay
     compose up -d
+    export_local_ca
     compose ps
     say "Nosu is starting at $PUBLIC_URL"
-    say 'Local deployment overview: http://localhost:3401'
+    if [ "$(config_value PUBLIC_DASHBOARD)" = true ]; then
+      say "Deployment overview: $PUBLIC_URL/dashboard/"
+    else
+      say 'Local deployment overview: http://localhost:3401'
+    fi
     say 'Check health with: sh infra/install.sh status'
     ;;
   update)
     compose config --quiet
     compose build nosu groups controller ditto-relay
     compose up -d --force-recreate
+    export_local_ca
     compose ps
     say 'Nosu containers rebuilt and replaced. Data volumes and infra/.env kept.'
     ;;

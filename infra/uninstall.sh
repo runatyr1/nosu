@@ -62,7 +62,7 @@ else
   # used to contact the containers during removal.
   compose() {
     NOSU_PUBLIC_URL=http://localhost NOSU_DATABASE_URL=postgresql://unused:unused@postgres:5432/unused \
-      POSTGRES_PASSWORD=unused UNFURL_PROXY_SECRET=unused \
+      POSTGRES_PASSWORD=unused UNFURL_PROXY_SECRET=unused CONTROLLER_PIN=0000 \
       compose_cmd -f "$COMPOSE" "$@"
   }
 fi

@@ -1,7 +1,12 @@
 /** Operator-facing defaults. User relay lists and deployment env values override these where supported. */
 export const SERVICE_CONFIG = {
-  localRelayPath: '/relay',
-  relaySyncApiPath: '/relay-sync',
+  deployment: {
+    dashboardPath: '/dashboard',
+    groupsPath: '/groups-app/',
+    relayPath: '/relay',
+    relaySyncPath: '/relay-sync',
+    trendingPath: '/api/trending',
+  },
   publicOrigin: 'https://nosu.social',
   groupsDevUrl: 'http://localhost:8080/',
   socialRelays: [

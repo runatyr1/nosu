@@ -35,7 +35,7 @@ export function useRelaySync(signer?: Signer): { status: RelaySyncStatus; retry:
     let renewal: ReturnType<typeof setTimeout> | undefined
     const publications: NostrEvent[] = []
     const controller = new AbortController()
-    const base = new URL(SERVICE_CONFIG.relaySyncApiPath + '/', window.location.origin).href
+    const base = new URL(SERVICE_CONFIG.deployment.relaySyncPath + '/', window.location.origin).href
     const release = (bearer: string): void => {
       void fetch(base + 'session', { method: 'DELETE', headers: { Authorization: `Bearer ${bearer}` }, keepalive: true }).catch(() => {})
     }
@@ -60,7 +60,7 @@ export function useRelaySync(signer?: Signer): { status: RelaySyncStatus; retry:
       if (!capabilities.enabled) { update({ state: 'disabled' }); return }
       // The local endpoint must belong to this deployment, never a container host.
       const local = new URL(capabilities.localRelay)
-      const expected = new URL(SERVICE_CONFIG.localRelayPath, window.location.origin)
+      const expected = new URL(SERVICE_CONFIG.deployment.relayPath, window.location.origin)
       expected.protocol = expected.protocol === 'https:' ? 'wss:' : 'ws:'
       if (local.href !== expected.href || new URL(capabilities.peer).protocol !== 'wss:') throw new Error('Invalid relay synchronization configuration')
       update({ state: 'connecting' })

@@ -1,0 +1,7 @@
+handle /dashboard {
+    redir * /dashboard/ 308
+}
+
+handle_path /dashboard/* {
+    reverse_proxy controller:3401
+}

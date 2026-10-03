@@ -103,11 +103,18 @@
   const logLines=document.querySelector('#log-lines');
   const syncView=document.querySelector('#sync-view');
   const dashboardBase=location.pathname.startsWith('/dashboard')?'/dashboard':'';
+  let loggingOut=false;
   let syncBusy=false;
   let controlBusy=false;
   let selectedService='nosu';
   let entries=[];
   let busyService=null;
+  function requireSession(response){
+    if(response.status!==401)return true;
+    loggingOut=true;
+    location.replace(`${dashboardBase}/`);
+    return false;
+  }
   const connections=[['internet','ingress'],['ingress','nosu'],['ingress','groups'],['nosu','trending'],['trending','postgres'],['nosu','ditto-relay'],['ditto-relay','opensearch']];
   function drawConnections(){
     const graph=document.querySelector('#services');
@@ -136,6 +143,7 @@
     const updated=document.querySelector('#updated');
     try{
       const response=await fetch(`${dashboardBase}/api/status`,{cache:'no-store'});
+      if(!requireSession(response))return;
       if(!response.ok)throw new Error('Status check failed');
       const data=await response.json();
       for(const [name,state] of Object.entries(data.services)){
@@ -148,7 +156,7 @@
       }
       updated.textContent='Checked '+new Date(data.checkedAt).toLocaleTimeString();
       drawConnections();
-    }catch(error){updated.textContent=error.message;}
+    }catch(error){if(!loggingOut)updated.textContent=error.message;}
   }
   function renderLogs(){
     const query=document.querySelector('#log-search').value.toLowerCase();
@@ -166,12 +174,13 @@
     try{
       const after=reset||entries.length===0?'':`?after=${entries[entries.length-1].id}`;
       const response=await fetch(`${dashboardBase}/api/logs/${service}${after}`,{cache:'no-store'});
+      if(!requireSession(response))return;
       if(!response.ok)throw new Error(`HTTP ${response.status}`);
       const data=await response.json();
       if(service!==selectedService)return;
       entries=reset||!after?data.entries:[...entries,...data.entries].slice(-500);
       renderLogs();
-    }catch(error){document.querySelector('#log-state').textContent=`Could not load logs: ${error.message}`;}
+    }catch(error){if(!loggingOut)document.querySelector('#log-state').textContent=`Could not load logs: ${error.message}`;}
     finally{if(busyService===service)busyService=null;}
   }
   function selectService(name){
@@ -199,7 +208,9 @@
   async function refreshSync(){
     if(syncBusy)return;syncBusy=true;
     try{
-      const response=await fetch(`${dashboardBase}/api/ditto-sync`,{cache:'no-store'});const data=await response.json();
+      const response=await fetch(`${dashboardBase}/api/ditto-sync`,{cache:'no-store'});
+      if(!requireSession(response))return;
+      const data=await response.json();
       if(!response.ok)throw new Error(data.error||`HTTP ${response.status}`);
       document.querySelector('#sync-state').textContent=`Live: ${data.live?.state||'unknown'} · Live catch-up: ${data.catchup?.state||'unknown'} · Backfill: ${data.backfill?.state||'unknown'} · Checked ${new Date().toLocaleTimeString()}`;
       const errors=[data.live?.error&&`Live: ${data.live.error}`,data.catchup?.lastError&&`Live catch-up: ${data.catchup.lastError}`,data.backfill?.lastError&&`Backfill: ${data.backfill.lastError}`].filter(Boolean);
@@ -255,7 +266,7 @@
       previewFields('#sync-progress-preview', [['Events imported',metric(data.counters?.downloaded)],['Events exported',metric(data.counters?.uploaded)],['Retries',metric(data.counters?.retries)]]);
       document.querySelector('#sync-windows').textContent=data.backfill?.completedWindows?.length?data.backfill.completedWindows.map(window=>`${dateLabel(window.since)} → ${dateLabel(window.until)}`).join('\n'):'No backfill windows completed yet.';
       if(!controlBusy){document.querySelector('#sync-pause').disabled=Boolean(data.paused);document.querySelector('#sync-resume').disabled=!data.paused;}
-    }catch(error){document.querySelector('#sync-state').textContent='Synchronization status unavailable';document.querySelector('#sync-error').textContent=error.message;}
+    }catch(error){if(!loggingOut){document.querySelector('#sync-state').textContent='Synchronization status unavailable';document.querySelector('#sync-error').textContent=error.message;}}
     finally{syncBusy=false;}
   }
   async function controlSync(action){
@@ -263,11 +274,13 @@
     let controlError='';
     const buttons=[...syncView.querySelectorAll('button[data-action]')];buttons.forEach(button=>button.disabled=true);
     try{
-      const response=await fetch(`${dashboardBase}/api/ditto-sync`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})});const data=await response.json();
+      const response=await fetch(`${dashboardBase}/api/ditto-sync`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})});
+      if(!requireSession(response))return;
+      const data=await response.json();
       if(!response.ok)throw new Error(data.error||`HTTP ${response.status}`);
       document.querySelector('#sync-error').textContent='';
-    }catch(error){controlError=error.message;}
-    finally{controlBusy=false;buttons.forEach(button=>button.disabled=false);await refreshSync();if(controlError)document.querySelector('#sync-error').textContent=controlError;}
+    }catch(error){if(!loggingOut)controlError=error.message;}
+    finally{controlBusy=false;buttons.forEach(button=>button.disabled=false);if(!loggingOut)await refreshSync();if(controlError)document.querySelector('#sync-error').textContent=controlError;}
   }
   function showPage(path,push=true){
     overview.hidden=path!='/';logView.hidden=path!='/logs';syncView.hidden=path!='/ditto-relay';
